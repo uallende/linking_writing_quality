@@ -1,0 +1,16 @@
+./data/*
+linking-writing-processes-to-writing-quality.zip
+data/
+Superseed
+Superseed/
+Superseed/*
+feature_store
+feature_store/
+feature_store*
+kaggle
+kaggle/
+kaggle*
+SPF_train_test
+SPF_train_test/
+SPF_feats
+SPF_feats/
