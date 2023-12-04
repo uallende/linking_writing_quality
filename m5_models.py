@@ -80,7 +80,10 @@ def cv_pipeline(train_feats, test_feats, lgb_params, boosting_type, seed=42, n_r
                                              seed=seed, n_repeats=n_repeats, n_splits=n_splits)
     return test_preds, oof_preds, rmse, model
 
-def run_lgb_cv_for_balanced_set(train_feats, test_feats, train_cols, target_col, lgb_params, balanced_dataset_ids, seed=42, n_repeats=5, n_splits=10):
+def run_lgb_cv_for_balanced_set(train_feats, test_feats, 
+                                train_cols, target_col, 
+                                lgb_params, balanced_dataset_ids, boosting_type,
+                                seed=42, n_repeats=5, n_splits=10):
 
     oof_results = pd.DataFrame(columns = ['id', 'score', 'prediction'])
     binned_y = np.digitize(train_feats[target_col], bins=sorted(train_feats[target_col].value_counts()))
@@ -103,7 +106,7 @@ def run_lgb_cv_for_balanced_set(train_feats, test_feats, train_cols, target_col,
             valid_preds_lgb, test_preds_lgb = run_lgb_model(model_lgb, 
                                                X_train, y_train, 
                                                X_valid, y_valid, 
-                                               X_test)
+                                               X_test, boosting_type)
         
             tmp_df = train_feats.loc[valid_idx][['id', 'score']]
             tmp_df['prediction'] = valid_preds_lgb
@@ -114,6 +117,29 @@ def run_lgb_cv_for_balanced_set(train_feats, test_feats, train_cols, target_col,
     print(f"LGBM Average RMSE over {n_repeats * n_splits} folds: {rmse:.6f}")
     return test_preds_lgb, avg_preds, rmse
 
+def cv_balanced_pipeline(train_feats, test_feats, lgb_params, 
+                         balanced_dataset_ids, boosting_type, 
+                         seed=42, n_repeats=5, n_splits=10):
+
+    target_col = ['score']
+    drop_cols = ['id']
+    train_cols = [col for col in train_feats.columns if col not in target_col + drop_cols]
+
+    missing_cols = [col for col in train_cols if col not in test_feats.columns]
+    missing_cols_df = pd.DataFrame({col: np.nan for col in missing_cols}, index=test_feats.index)
+    test_feats = pd.concat([test_feats, missing_cols_df], axis=1)
+
+    train_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+    test_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    test_preds, oof_preds, rmse = run_lgb_cv_for_balanced_set(train_feats=train_feats, test_feats=test_feats, 
+                                             train_cols=train_cols, target_col=target_col, 
+                                             lgb_params=lgb_params, balanced_dataset_ids=balanced_dataset_ids,
+                                             boosting_type=boosting_type,
+                                             seed=seed, n_repeats=n_repeats, n_splits=n_splits)
+    
+    return test_preds, oof_preds, rmse
+
 def run_xgb_cv(train_feats, test_feats, train_cols, target_col, xgb_params, seed, n_repeats, n_splits):
 
     oof_results = pd.DataFrame(columns = ['id', 'score', 'prediction'])
@@ -123,6 +149,8 @@ def run_xgb_cv(train_feats, test_feats, train_cols, target_col, xgb_params, seed
     y = train_feats[target_col]
     X_test = test_feats[train_cols]
 
+    test_preds_list = []
+
     for i in tqdm(range(n_repeats), desc="Iterations"):
         skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed + i)
 
@@ -131,10 +159,12 @@ def run_xgb_cv(train_feats, test_feats, train_cols, target_col, xgb_params, seed
             X_valid, y_valid = X.loc[valid_idx], y.loc[valid_idx]
 
             model_xgb = xgb.XGBRegressor(**xgb_params).set_params(early_stopping_rounds=250, random_state = seed)
-            valid_preds_xgb, _ = run_xgb_model(model_xgb, 
+            valid_preds_xgb, test_preds_xgb = run_xgb_model(model_xgb, 
                                                X_train, y_train, 
                                                X_valid, y_valid, 
                                                X_test)
+
+            test_preds_list.append(test_preds_xgb)
 
             tmp_df = train_feats.loc[valid_idx][['id','score']]
             tmp_df['prediction'] = valid_preds_xgb
@@ -143,7 +173,27 @@ def run_xgb_cv(train_feats, test_feats, train_cols, target_col, xgb_params, seed
     avg_preds = oof_results.groupby(['id','score'])['prediction'].mean().reset_index()
     rmse = mean_squared_error(avg_preds['score'], avg_preds['prediction'], squared=False)
     print(f"XGB Average RMSE over {n_repeats * n_splits} folds: {rmse:.6f}")
-    return rmse
+    return np.mean(test_preds_list, axis=0), avg_preds, rmse, model_xgb
+
+def xgb_cv_pipeline(train_feats, test_feats, xgb_params, seed=42, n_repeats=5, n_splits=10):
+
+    target_col = ['score']
+    drop_cols = ['id']
+    train_cols = [col for col in train_feats.columns if col not in target_col + drop_cols]
+
+    missing_cols = [col for col in train_cols if col not in test_feats.columns]
+    missing_cols_df = pd.DataFrame({col: np.nan for col in missing_cols}, index=test_feats.index)
+    test_feats = pd.concat([test_feats, missing_cols_df], axis=1)
+
+    train_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+    test_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    test_preds, oof_preds, rmse, model = run_xgb_cv(train_feats=train_feats, test_feats=test_feats, 
+                      train_cols=train_cols, target_col=target_col, 
+                      xgb_params=xgb_params,
+                      seed=seed, n_repeats=n_repeats, n_splits=n_splits)
+    
+    return test_preds, oof_preds, rmse, model
 
 def final_processing(scores_lgb, scores_xgb, scores_blend, test_predict_list_lgb, test_predict_list_xgb, test_feats):
     print(f'OOF AVG LGBM: {np.mean(scores_lgb):.6f}, XGB: {np.mean(scores_xgb):.6f}, Blend: {np.mean(scores_blend):.6f}')
@@ -152,4 +202,3 @@ def final_processing(scores_lgb, scores_xgb, scores_blend, test_predict_list_lgb
     final_pred_blend = 0.5 * (final_pred_lgb + final_pred_xgb)
     predictions_df = pd.DataFrame({'id': test_feats['id'], 'score': final_pred_blend})
     return final_pred_lgb, final_pred_xgb, final_pred_blend, predictions_df
-

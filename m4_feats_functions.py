@@ -1,10 +1,11 @@
-
 import pandas as pd
 import numpy as np
 import copy, re
 
 from tqdm import tqdm
 from collections import Counter
+from sklearn.feature_extraction.text import CountVectorizer
+
 # Function to construct essays copied from here (small adjustments): https://www.kaggle.com/code/yuriao/fast-essay-constructor
 def processingInputs(currTextInput):
     essayText = ""
@@ -517,7 +518,8 @@ def action_time_by_bucket_feats(train_logs, test_logs):
     return train_feats, test_feats
 
 def process_action_time_activity(train_logs, test_logs):
-    def create_action_time_activity_features(df_logs):
+    def create_action_time_activity_features(train_logs):
+        df_logs = train_logs.copy()
         msk = df_logs['activity'].str.contains('Move From')
         df_logs.loc[msk, 'activity'] = 'Move'
         grouped = df_logs.groupby(['id', 'activity'])['action_time']
@@ -773,3 +775,35 @@ def essay_paste_words(train_logs, test_logs):
     train_paste_words.fillna(0, inplace=True)
     test_paste_words.fillna(0, inplace=True)
     return train_logs, test_logs
+
+def countvectorize_one_one(train_logs, test_logs, train_feats, test_feats):
+
+    tr_ids = train_feats.id
+    tst_ids = test_feats.id
+    tr_ts_logs = pd.concat([train_logs, test_logs], axis=0)
+    tr_ts_feats = pd.concat([train_feats['id'], test_feats['id']], axis=0).reset_index(drop=True)
+
+    essays = getEssays(tr_ts_logs)
+    c_vect = CountVectorizer(ngram_range=(1, 1))
+    toks = c_vect.fit_transform(essays['essay']).todense()
+    toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df.reset_index(drop=True, inplace=True)
+    print(toks_df.shape, tr_ts_feats.shape)
+
+    tr_ts_feats = pd.concat([tr_ts_feats, toks_df], axis=1)
+
+    train_feats = tr_ts_feats[tr_ts_feats['id'].isin(tr_ids)]
+    test_feats = tr_ts_feats[tr_ts_feats['id'].isin(tst_ids)]
+
+    return train_feats, test_feats
+
+def get_keys_pressed_per_minute(train_logs, test_logs):
+    inputs_remove_cut = train_logs[train_logs['activity'].isin(['Input', 'Remove/Cut'])]
+    total_keys_pressed = inputs_remove_cut.groupby(['id']).agg(keys_pressed_per_minute=('event_id', 'count'))
+    train_ = round(total_keys_pressed / 60, 2)
+
+    inputs_remove_cut = test_logs[test_logs['activity'].isin(['Input', 'Remove/Cut'])]
+    total_keys_pressed = inputs_remove_cut.groupby(['id']).agg(keys_pressed_per_minute=('event_id', 'count'))
+    test_ = round(total_keys_pressed / 60, 2)
+
+    return train_, test_

@@ -1,5 +1,4 @@
 import os, gc
-
 from itertools import combinations
 from m5_models import *
 
@@ -18,7 +17,6 @@ def merge_pkl_files(directory):
 
     return merged_df
 
-
 def load_feature_set(base_dir, feature_type, is_train=True):
     subdir = 'train' if is_train else 'test'
     prefix = 'train_' if is_train else 'test_'
@@ -29,7 +27,6 @@ def load_feature_set(base_dir, feature_type, is_train=True):
         return None
 
     return pd.read_pickle(file_path)
-
 
 def get_feature_sets_from_folder(folder_path):
     feature_sets = set()
@@ -43,12 +40,10 @@ def get_feature_sets_from_folder(folder_path):
             feature_sets.add(feature_set_name)
     return list(feature_sets)
 
-
 def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, train_scores, seed=42, n_repeats=5, n_splits=10):
     results = []
     feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
     print(feature_sets)
-    #feature_sets = [('wpm_feats', 'IKI', 'action_time_gap_by_acti')]
 
     for feature_set in feature_sets:
         print(feature_set)
@@ -60,7 +55,7 @@ def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, b
             train_feats = train_feats.merge(base_train_feats, on=['id'], how='left')
             test_feats = test_feats.merge(base_test_feats, on=['id'], how='left')
 
-            oof_results, rmse = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
+            _, oof_results, rmse, _ = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
             improvement = baseline_metrics - rmse
             results.append({'Feature Set': feature_set, 'Metric': rmse, 'Improvement': improvement})
             print(f'Features: {feature_set}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
@@ -127,11 +122,9 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
         for feature_set in combo:
             train_feat_set = load_feature_set(base_dir, feature_set, is_train=True)
             test_feat_set = load_feature_set(base_dir, feature_set, is_train=False)
-            print(f'Merging: {feature_set}. Size: {train_feat_set.shape}')
 
             train_feats = train_feats.merge(train_feat_set, on=['id'], how='left')
             test_feats = test_feats.merge(test_feat_set, on=['id'], how='left')
-            print(f'Size after the merge: {train_feats.shape}')
 
         target_col = ['score']
         drop_cols = ['id']
@@ -145,20 +138,18 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
         test_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
         print(train_feats.shape, test_feats.shape)
         # avg_pred, rmse = run_lgb_cv(train_feats, test_feats, train_cols, target_col, lgb_params_1, seed, n_repeats, n_splits) RUN FOR DEBUGGING
-        oof_results, rmse = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
+        _, oof_preds, rmse, _ = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
         improvement = baseline_metrics - rmse
         results.append({'Feature Combination': combo, 'Metric': rmse, 'Improvement': improvement})
         print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
 
     return pd.DataFrame(results)
 
-
-def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 4.5], pct_to_remv=0.2, n_datasets=2, seed=42):
+def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 4.5], pct_to_remv=0.1, n_datasets=2, seed=42):
 
     balanced_scores = []
     shuffled_scores = train_scores.copy()
     for i in range(n_datasets):
-        np.random.seed(seed)
         shuffled_scores = shuffled_scores.sample(frac=1, random_state=seed + i)
         scores_to_keep = [score for score in shuffled_scores.score.unique() if score not in scores_to_split]
         ix_to_keep = []
@@ -166,9 +157,8 @@ def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 
 
         for score in [3, 3.5, 4, 4.5]:
             tpm_scores = shuffled_scores[shuffled_scores['score']==score]
-            series_len = len(tpm_scores)
-            rows_to_rmv = int(series_len * pct_to_remv)
-            keep_ix = tpm_scores.index.values[rows_to_rmv:]
+            rows_to_rmv = int(len(tpm_scores) * pct_to_remv) # calcualte rows to remove
+            keep_ix = tpm_scores.index.values[rows_to_rmv:] # df is shuffled - removing first chunk
             ix_to_keep.append(keep_ix)
 
         ix_to_keep = [j for i in ix_to_keep for j in i]
@@ -176,3 +166,47 @@ def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 
         balanced_scores.append(temp_scores)
     
     return balanced_scores
+
+def load_feature_set_comb(base_dir, feature_type, is_train=True):
+
+    file_path = os.path.join(base_dir, 'train_' + feature_type + '.pkl')
+
+    if not os.path.exists(file_path):
+        print(f"Warning: File not found - {file_path}")
+        return None
+
+    return pd.read_pickle(file_path)
+
+def compare_with_baseline_comb(base_dir, base_feats, train_ids, test_ids, params, baseline_metrics, train_scores, seed=42, n_repeats=5, n_splits=10):
+    results = []
+    feature_sets = get_feature_sets_from_folder(os.path.join(base_dir))
+    print(feature_sets)
+
+    for feature_set in feature_sets:
+        print(feature_set)
+        new_feats = load_feature_set_comb(base_dir, feature_set, is_train=True)
+        feats = base_feats.merge(new_feats, on='id', how='left')
+        feats = preprocess_feats(feats)
+        train_feats = feats[feats['id'].isin(train_ids)]
+        test_feats = feats[feats['id'].isin(test_ids)]
+
+        if train_feats is not None:
+            train_feats = train_feats.merge(train_scores, on=['id'], how='left')
+            _, oof_results, rmse, _ = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
+            improvement = baseline_metrics - rmse
+            results.append({'Feature Set': feature_set, 'Metric': rmse, 'Improvement': improvement})
+            print(f'Features: {feature_set}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
+
+            # Cleanup
+            del train_feats, oof_results
+            gc.collect()
+        else:
+            print(f"Skipping feature set {feature_set} due to missing data.")
+    return pd.DataFrame(results)
+
+def preprocess_feats(feats, scaler):
+    feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+    feats.fillna(-1e10, inplace=True)
+    feats_columns = feats.columns
+    feats.loc[:, feats_columns != 'id'] = scaler.fit_transform(feats.loc[:, feats_columns != 'id'])
+    return feats
