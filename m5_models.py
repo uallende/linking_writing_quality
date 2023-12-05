@@ -1,65 +1,54 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
 import lightgbm as lgb
 import xgboost as xgb
-from sklearn import metrics
-from sklearn.metrics import mean_squared_error
 from tqdm import tqdm  
-
-def run_lgb_model(model, X_train, y_train, X_valid, y_valid, X_test, boosting_type):
-    if boosting_type != 'dart':
-        model.fit(X_train, y_train, 
-                  eval_set=[(X_valid, y_valid)], 
-                  callbacks=[lgb.early_stopping(250, first_metric_only=True, verbose=False)])
-    else:
-        model.fit(X_train, y_train)  # No early stopping for DART
-
-    valid_predictions = model.predict(X_valid, num_iteration=model.best_iteration_)
-    test_predictions = model.predict(X_test, num_iteration=model.best_iteration_)
-    return valid_predictions, test_predictions
+from sklearn import metrics
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import Ridge
 
 
-def run_xgb_model(model, X_train, y_train, X_valid, y_valid, X_test):
-    model.fit(
-        X_train, y_train, 
-        eval_set=[(X_valid, y_valid)],
-        verbose=False
-    )
-    valid_predictions = model.predict(X_valid)
-    test_predictions = model.predict(X_test)
-    return valid_predictions, test_predictions
+def calculate_rmse(df):
+    return mean_squared_error(df['score'], df['prediction'], squared=False)
 
 def run_lgb_cv(train_feats, test_feats, train_cols, target_col, lgb_params, boosting_type, seed, n_repeats, n_splits):
 
-    oof_results = pd.DataFrame(columns = ['id', 'score', 'prediction'])
-    binned_y = np.digitize(train_feats[target_col], bins=sorted(train_feats[target_col].value_counts()))
+    oof_results = pd.DataFrame(columns = ['id', 'iteration', 'score', 'prediction'])
 
     X = train_feats[train_cols]
     y = train_feats[target_col]
     X_test = test_feats[train_cols]
+    test_preds = []
 
     for i in range(n_repeats):
-        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed + i)
+        skf = model_selection.KFold(n_splits=n_splits, shuffle=True, random_state=seed + i)
 
-        for train_idx, valid_idx in skf.split(train_feats, binned_y):
+        for train_idx, valid_idx in skf.split(train_feats, y):
             X_train, y_train = X.loc[train_idx], y.loc[train_idx]
             X_valid, y_valid = X.loc[valid_idx], y.loc[valid_idx]
 
             model_lgb = lgb.LGBMRegressor(**lgb_params, verbose=-1, random_state=seed)
-            valid_preds_lgb, test_preds_lgb = run_lgb_model(model = model_lgb,
-                                               X_train=X_train, y_train=y_train, 
-                                               X_valid=X_valid, y_valid=y_valid, 
-                                               X_test=X_test, boosting_type=boosting_type)
+            if boosting_type != 'dart':
+                model.fit(X_train, y_train, 
+                        eval_set=[(X_valid, y_valid)], 
+                        callbacks=[lgb.early_stopping(200, first_metric_only=True, verbose=False)])
+            else:
+                model.fit(X_train, y_train)  # No early stopping for DART
+
+            valid_predictions = model.predict(X_valid, num_iteration=model.best_iteration_)
+            test_predictions = model.predict(X_test, num_iteration=model.best_iteration_)
+            test_preds.append(test_predictions)
         
             tmp_df = train_feats.loc[valid_idx][['id','score']]
-            tmp_df['prediction'] = valid_preds_lgb
+            tmp_df['prediction'] = valid_predictions
+            tmp_df['iteration'] = i + 1
             oof_results = pd.concat([oof_results, tmp_df])
 
     avg_preds = oof_results.groupby(['id','score'])['prediction'].mean().reset_index()
     rmse = mean_squared_error(avg_preds['score'], avg_preds['prediction'], squared=False)
     print(f"LGBM Average RMSE over {n_repeats * n_splits} folds: {rmse:.6f}")
-    return test_preds_lgb, avg_preds, rmse, model_lgb  
+    return test_preds, oof_results, rmse, model_lgb  
 
 def cv_pipeline(train_feats, test_feats, lgb_params, boosting_type, seed=42, n_repeats=5, n_splits=10):
 
@@ -71,13 +60,15 @@ def cv_pipeline(train_feats, test_feats, lgb_params, boosting_type, seed=42, n_r
     missing_cols_df = pd.DataFrame({col: np.nan for col in missing_cols}, index=test_feats.index)
     test_feats = pd.concat([test_feats, missing_cols_df], axis=1)
 
-    train_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
-    test_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     test_preds, oof_preds, rmse, model = run_lgb_cv(train_feats=train_feats, test_feats=test_feats, 
                                              train_cols=train_cols, target_col=target_col, 
                                              lgb_params=lgb_params, boosting_type=boosting_type,
                                              seed=seed, n_repeats=n_repeats, n_splits=n_splits)
+    
+    rmse_per_iteration = oof_preds.groupby('iteration').apply(calculate_rmse)
+    print(f'Mean RMSE of all iterations: {np.mean(rmse_per_iteration):.6f}')
+
     return test_preds, oof_preds, rmse, model
 
 def run_lgb_cv_for_balanced_set(train_feats, test_feats, 
@@ -117,6 +108,7 @@ def run_lgb_cv_for_balanced_set(train_feats, test_feats,
     print(f"LGBM Average RMSE over {n_repeats * n_splits} folds: {rmse:.6f}")
     return test_preds_lgb, avg_preds, rmse
 
+
 def cv_balanced_pipeline(train_feats, test_feats, lgb_params, 
                          balanced_dataset_ids, boosting_type, 
                          seed=42, n_repeats=5, n_splits=10):
@@ -139,6 +131,16 @@ def cv_balanced_pipeline(train_feats, test_feats, lgb_params,
                                              seed=seed, n_repeats=n_repeats, n_splits=n_splits)
     
     return test_preds, oof_preds, rmse
+
+def run_xgb_model(model, X_train, y_train, X_valid, y_valid, X_test):
+    model.fit(
+        X_train, y_train, 
+        eval_set=[(X_valid, y_valid)],
+        verbose=False
+    )
+    valid_predictions = model.predict(X_valid)
+    test_predictions = model.predict(X_test)
+    return valid_predictions, test_predictions
 
 def run_xgb_cv(train_feats, test_feats, train_cols, target_col, xgb_params, seed, n_repeats, n_splits):
 
@@ -202,12 +204,6 @@ def final_processing(scores_lgb, scores_xgb, scores_blend, test_predict_list_lgb
     final_pred_blend = 0.5 * (final_pred_lgb + final_pred_xgb)
     predictions_df = pd.DataFrame({'id': test_feats['id'], 'score': final_pred_blend})
     return final_pred_lgb, final_pred_xgb, final_pred_blend, predictions_df
-
-import numpy as np
-import pandas as pd
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import mean_squared_error
 
 def run_ridge_model(model, X_train, y_train, X_valid, X_test):
     model.fit(X_train, y_train)

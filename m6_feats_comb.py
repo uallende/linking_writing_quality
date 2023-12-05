@@ -430,7 +430,8 @@ def pauses_feats(logs):
     largest_lantency = group.max()
     smallest_lantency = group.min()
     median_lantency = group.median()
-    initial_pause = logs.groupby('id')['original_start_time'].first() / 1000
+    # initial_pause = logs.groupby('id')['original_start_time'].first() / 1000
+    initial_pause = logs.groupby('id')['down_time'].first() / 1000
     pauses_half_sec = group.apply(lambda x: ((x > 0.5) & (x < 1)).sum())
     pauses_1_sec = group.apply(lambda x: ((x > 1) & (x < 1.5)).sum())
     pauses_1_half_sec = group.apply(lambda x: ((x > 1.5) & (x < 2)).sum())

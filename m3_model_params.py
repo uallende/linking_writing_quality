@@ -113,7 +113,6 @@ xgb_params_3 = {
     'device': 'cuda',
     'tree_method': 'hist'}
 
-
 non_important_feats = [
         'tok_21',
         'tok_20',
@@ -136,7 +135,6 @@ non_important_feats = [
         'up_event_2_count',
         'down_event_15_count',
         'word_count_change5_quantile',
-        'low_sent_count',
         'cursor_position_change5_quantile',
         'word_count_change3_max',
         'essay_words_min',

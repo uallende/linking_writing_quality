@@ -5,6 +5,7 @@ import copy, re
 from tqdm import tqdm
 from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
+from collections import defaultdict
 
 # Function to construct essays copied from here (small adjustments): https://www.kaggle.com/code/yuriao/fast-essay-constructor
 def processingInputs(currTextInput):
@@ -136,12 +137,6 @@ def compute_paragraph_aggregations(df):
 # The following code comes almost Abdullah's notebook: https://www.kaggle.com/code/abdullahmeda/enter-ing-the-timeseries-space-sec-3-new-aggs
 # Abdullah's code is based on work shared in previous notebooks (e.g., https://www.kaggle.com/code/hengzheng/link-writing-simple-lgbm-baseline)
 
-from collections import defaultdict
-
-# The following code comes almost Abdullah's notebook: https://www.kaggle.com/code/abdullahmeda/enter-ing-the-timeseries-space-sec-3-new-aggs
-# Abdullah's code is based on work shared in previous notebooks (e.g., https://www.kaggle.com/code/hengzheng/link-writing-simple-lgbm-baseline)
-
-from collections import defaultdict
 
 class Preprocessor:
     
