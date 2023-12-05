@@ -1,6 +1,7 @@
 import os, gc
 from itertools import combinations
 from m5_models import *
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 def merge_pkl_files(directory):
     files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
@@ -169,7 +170,7 @@ def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 
 
 def load_feature_set_comb(base_dir, feature_type, is_train=True):
 
-    file_path = os.path.join(base_dir, 'train_' + feature_type + '.pkl')
+    file_path = os.path.join(base_dir, feature_type + '.pkl')
 
     if not os.path.exists(file_path):
         print(f"Warning: File not found - {file_path}")
@@ -177,7 +178,9 @@ def load_feature_set_comb(base_dir, feature_type, is_train=True):
 
     return pd.read_pickle(file_path)
 
-def compare_with_baseline_comb(base_dir, base_feats, train_ids, test_ids, params, baseline_metrics, train_scores, seed=42, n_repeats=5, n_splits=10):
+def compare_with_baseline_comb(base_dir, base_feats, train_ids, test_ids, 
+                               params, baseline_metrics, train_scores, scaler, 
+                               seed=42, n_repeats=5, n_splits=10):
     results = []
     feature_sets = get_feature_sets_from_folder(os.path.join(base_dir))
     print(feature_sets)
@@ -186,9 +189,11 @@ def compare_with_baseline_comb(base_dir, base_feats, train_ids, test_ids, params
         print(feature_set)
         new_feats = load_feature_set_comb(base_dir, feature_set, is_train=True)
         feats = base_feats.merge(new_feats, on='id', how='left')
-        feats = preprocess_feats(feats)
+        feats = preprocess_feats(feats, scaler)
         train_feats = feats[feats['id'].isin(train_ids)]
         test_feats = feats[feats['id'].isin(test_ids)]
+
+        print(f'Base {base_feats.shape}. New feats {new_feats.shape}. Train feats {train_feats.shape}')
 
         if train_feats is not None:
             train_feats = train_feats.merge(train_scores, on=['id'], how='left')
@@ -204,9 +209,46 @@ def compare_with_baseline_comb(base_dir, base_feats, train_ids, test_ids, params
             print(f"Skipping feature set {feature_set} due to missing data.")
     return pd.DataFrame(results)
 
-def preprocess_feats(feats, scaler):
+def preprocess_feats(feats, scaler=StandardScaler()):
     feats.replace([np.inf, -np.inf], np.nan, inplace=True)
     feats.fillna(-1e10, inplace=True)
     feats_columns = feats.columns
     feats.loc[:, feats_columns != 'id'] = scaler.fit_transform(feats.loc[:, feats_columns != 'id'])
     return feats
+
+
+def compare_feature_combos(base_dir, base_feats, params, train_scores,
+                           baseline_metrics, train_ids, test_ids, 
+                           seed=42, n_repeats=5, n_splits=10, 
+                           max_combination_length=7,
+                           scaler=StandardScaler()):
+    
+    results = []
+    feature_sets = get_feature_sets_from_folder(os.path.join(base_dir))
+    feature_combinations = generate_feature_combinations(feature_sets, max_combination_length)
+    print(f'Number of combinations: {len(feature_combinations)}')
+    # feature_combinations = [('IKI', 'rep_cut')]
+
+    for combo in feature_combinations:
+        print(f'Feature set: {combo}')
+        # Reset train_feats and test_feats to base features at the beginning of each combination
+        feats = base_feats.copy()
+        print(f'Base train size: {base_feats.shape}')
+
+        for feature_set in combo:
+            feat_set = load_feature_set_comb(base_dir, feature_set)
+            feats = feats.merge(feat_set, on='id', how='left')
+            feats = preprocess_feats(feats, scaler)
+
+            train_feats = feats[feats['id'].isin(train_ids)]
+            train_feats = train_feats.merge(train_scores, on='id', how='left')
+            test_feats = feats[feats['id'].isin(test_ids)]
+
+        print(train_feats.shape, test_feats.shape)
+        # avg_pred, rmse = run_lgb_cv(train_feats, test_feats, train_cols, target_col, lgb_params_1, seed, n_repeats, n_splits) RUN FOR DEBUGGING
+        _, oof_preds, rmse, _ = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
+        improvement = baseline_metrics - rmse
+        results.append({'Feature Combination': combo, 'Metric': rmse, 'Improvement': improvement})
+        print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
+
+    return pd.DataFrame(results)

@@ -121,7 +121,6 @@ def compute_sentence_aggregations(essay):
     sent_agg_df = sent_agg_df.reset_index(drop=True)
     sent_agg_df.drop(columns=["sent_word_count_count"], inplace=True)
     sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
-    sent_agg_df['low_sent_count'] = sent_agg_df['sent_count'] <= 3
     return sent_agg_df
 
 def compute_paragraph_aggregations(essay):
