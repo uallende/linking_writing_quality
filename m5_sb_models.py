@@ -58,7 +58,6 @@ def lgb_pipeline(train, test, n_splits=10, iterations=5):
 
 
 def xgb_pipeline(train, test, n_splits=10, iterations=5):
-        
 
     x = train.drop(['id', 'score'], axis=1)
     y = train['score'].values
@@ -68,13 +67,19 @@ def xgb_pipeline(train, test, n_splits=10, iterations=5):
     valid_preds = pd.DataFrame()
 
     for iter in range(iterations):
-        model = xgb.XGBRegressor(**xgb_params, random_state=42+iter)
+        model = xgb.XGBRegressor(**xgb_params).set_params(early_stopping_rounds=250, random_state = 42+iter)
         skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
             
-            model.fit(train_x, train_y)
+            model.fit(
+                train_x, train_y, 
+                eval_set=[(valid_x, valid_y)],
+                verbose=False
+                )
+
+            print(model.best_iteration)
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
