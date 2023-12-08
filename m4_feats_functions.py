@@ -689,7 +689,7 @@ def basic_stats(series, prefix):
     }
     return pd.Series(stats)
 
-def create_feats_wc_change(logs):
+def create_feats_wc_change(logs): #by activity
     wc_change_df = logs.copy()
     wc_change_df['word_count_shift1'] = wc_change_df.groupby('id')['word_count'].shift(1)
     wc_change_df['word_count_change'] = np.abs(wc_change_df['word_count'] - wc_change_df['word_count_shift1']) #why abs
@@ -818,3 +818,23 @@ def normalise_up_down_times(logs):
     logs = logs.drop(columns=['up_time'])
     logs = logs.rename(columns={'down_time':'original_start_time','ad_down_time':'down_time','ad_up_time':'up_time' })
     return logs
+
+import polars as pl
+
+def word_change_stats(train_logs, test_logs):
+
+    data = []
+    for logs in [train_logs, test_logs]:
+        logs = logs.with_columns(
+            pl.col('word_count').diff().over('id').fill_nan(0).alias('wc_diff')
+        )
+
+        pref = 'wc_diff'
+        x = logs.group_by('id').agg([
+            pl.col('wc_diff').mean().alias(f'{pref}_mean'),
+            pl.col('wc_diff').std().alias(f'{pref}_std'),
+            pl.col('wc_diff').kurtosis().alias(f'{pref}_kurt'),
+            pl.col('wc_diff').skew().alias(f'{pref}_skew')
+        ])
+        data.append(x)
+    return data[0].collect().to_pandas(), data[1].collect().to_pandas()
