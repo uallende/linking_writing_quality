@@ -87,20 +87,21 @@ def q3(x):
 
 AGGREGATIONS = ['count', 'mean', 'std', 'min', 'max', 'first', 'last', 'sem', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
 
-def split_essays_into_sentences(df):
-    essay_df = df
-    #essay_df['id'] = essay_df.index
-    essay_df['sent'] = essay_df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
-    essay_df = essay_df.explode('sent')
-    essay_df['sent'] = essay_df['sent'].apply(lambda x: x.replace('\n','').strip())
-    # Number of characters in sentences
-    essay_df['sent_len'] = essay_df['sent'].apply(lambda x: len(x))
-    # Number of words in sentences
-    essay_df['sent_word_count'] = essay_df['sent'].apply(lambda x: len(x.split(' ')))
-    essay_df = essay_df[essay_df.sent_len!=0].reset_index(drop=True)
-    return essay_df
-
-def compute_sentence_aggregations(df):
+def compute_sentence_aggregations(essay):
+    def split_essays_into_sentences(df):
+        essay_df = df
+        #essay_df['id'] = essay_df.index
+        essay_df['sent'] = essay_df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+        essay_df = essay_df.explode('sent')
+        essay_df['sent'] = essay_df['sent'].apply(lambda x: x.replace('\n','').strip())
+        # Number of characters in sentences
+        essay_df['sent_len'] = essay_df['sent'].apply(lambda x: len(x))
+        # Number of words in sentences
+        essay_df['sent_word_count'] = essay_df['sent'].apply(lambda x: len(x.split(' ')))
+        essay_df = essay_df[essay_df.sent_len!=0].reset_index(drop=True)
+        return essay_df
+    
+    df = split_essays_into_sentences(essay)
     sent_agg_df = pd.concat(
         [df[['id','sent_len']].groupby(['id']).agg(AGGREGATIONS), df[['id','sent_word_count']].groupby(['id']).agg(AGGREGATIONS)], axis=1
     )
@@ -111,19 +112,20 @@ def compute_sentence_aggregations(df):
     sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
     return sent_agg_df
 
-def split_essays_into_paragraphs(df):
-    essay_df = df
-    #essay_df['id'] = essay_df.index
-    essay_df['paragraph'] = essay_df['essay'].apply(lambda x: x.split('\n'))
-    essay_df = essay_df.explode('paragraph')
-    # Number of characters in paragraphs
-    essay_df['paragraph_len'] = essay_df['paragraph'].apply(lambda x: len(x)) 
-    # Number of words in paragraphs
-    essay_df['paragraph_word_count'] = essay_df['paragraph'].apply(lambda x: len(x.split(' ')))
-    essay_df = essay_df[essay_df.paragraph_len!=0].reset_index(drop=True)
-    return essay_df
-
-def compute_paragraph_aggregations(df):
+def compute_paragraph_aggregations(essay):
+    def split_essays_into_paragraphs(df):
+        essay_df = df
+        #essay_df['id'] = essay_df.index
+        essay_df['paragraph'] = essay_df['essay'].apply(lambda x: x.split('\n'))
+        essay_df = essay_df.explode('paragraph')
+        # Number of characters in paragraphs
+        essay_df['paragraph_len'] = essay_df['paragraph'].apply(lambda x: len(x)) 
+        # Number of words in paragraphs
+        essay_df['paragraph_word_count'] = essay_df['paragraph'].apply(lambda x: len(x.split(' ')))
+        essay_df = essay_df[essay_df.paragraph_len!=0].reset_index(drop=True)
+        return essay_df
+    
+    df = split_essays_into_paragraphs(essay)
     paragraph_agg_df = pd.concat(
         [df[['id','paragraph_len']].groupby(['id']).agg(AGGREGATIONS), df[['id','paragraph_word_count']].groupby(['id']).agg(AGGREGATIONS)], axis=1
     ) 
@@ -394,7 +396,10 @@ def pauses_feats(train_logs, test_logs):
         largest_lantency = group.max()
         smallest_lantency = group.min()
         median_lantency = group.median()
-        initial_pause = logs.groupby('id')['down_time'].first() / 1000
+        if 'original_start_time' in logs.columns:
+            initial_pause = logs.groupby('id')['original_start_time'].first() / 1000
+        else:
+            initial_pause = logs.groupby('id')['down_time'].first() / 1000
         pauses_half_sec = group.apply(lambda x: ((x > 0.5) & (x < 1)).sum())
         pauses_1_sec = group.apply(lambda x: ((x > 1) & (x < 1.5)).sum())
         pauses_1_half_sec = group.apply(lambda x: ((x > 1.5) & (x < 2)).sum())
@@ -684,8 +689,8 @@ def basic_stats(series, prefix):
     }
     return pd.Series(stats)
 
-def create_feats_wc_change(comb_df):
-    wc_change_df = comb_df.copy()
+def create_feats_wc_change(logs):
+    wc_change_df = logs.copy()
     wc_change_df['word_count_shift1'] = wc_change_df.groupby('id')['word_count'].shift(1)
     wc_change_df['word_count_change'] = np.abs(wc_change_df['word_count'] - wc_change_df['word_count_shift1']) #why abs
 
@@ -699,7 +704,8 @@ def create_feats_wc_change(comb_df):
     new_columns = [col[1] if col[0] == 'id' else '_'.join(col) for col in wc_change_feats.columns]
     new_columns[0] = 'id'
     wc_change_feats.columns = new_columns
-    return wc_change_feats.fillna(0, inplace=True)
+    wc_change_feats = wc_change_feats.fillna(0)
+    return wc_change_feats
 
 def essay_replace_words(train_logs, test_logs):
     train_replace = train_logs[train_logs['activity']=='Replace'].copy()
@@ -802,3 +808,13 @@ def get_keys_pressed_per_minute(train_logs, test_logs):
     test_ = round(total_keys_pressed / 60, 2)
 
     return train_, test_
+
+def normalise_up_down_times(logs):
+    down_time_start = logs.groupby('id')['down_time'].min().reset_index()
+    down_time_start = down_time_start.rename(columns={'down_time': 'ad_down_time'})
+    logs = logs.merge(down_time_start, on='id', how='left')
+    logs['ad_down_time'] = logs['down_time'] - logs['ad_down_time']
+    logs['ad_up_time'] = logs['ad_down_time'] + logs['action_time']
+    logs = logs.drop(columns=['up_time'])
+    logs = logs.rename(columns={'down_time':'original_start_time','ad_down_time':'down_time','ad_up_time':'up_time' })
+    return logs

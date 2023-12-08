@@ -99,18 +99,20 @@ def create_specific_balanced_datasets(df, target_col, scores_to_split, num_datas
 
     return balanced_datasets
 
-def generate_feature_combinations(feature_sets, max_combination_length):
+def generate_feature_combinations(feature_sets, max_length, min_length=2):
     all_combinations = []
-    for r in range(max_combination_length, 0, -1):
-        all_combinations.extend(combinations(feature_sets, r))
+    for r in range(min_length, max_length + 1):
+        for combo in combinations(feature_sets, r):
+            all_combinations.append(combo)
     return all_combinations
+
 
 def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, seed=42, n_repeats=5, n_splits=10, max_combination_length=7):
     results = []
     feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
-    feature_combinations = generate_feature_combinations(feature_sets, max_combination_length)
-    print(f'Number of combinations: {len(feature_combinations)}')
-    # feature_combinations = [('IKI', 'rep_cut')]
+    min_combination_length = 4  # Set minimum combination length
+    feature_combinations = [combo for combo in feature_combinations if len(combo) >= min_combination_length]
+
 
     for combo in feature_combinations:
         print(f'Feature set: {combo}')
@@ -145,6 +147,59 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
         print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
 
     return pd.DataFrame(results)
+
+
+def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, seed=42, n_repeats=5, n_splits=10, max_combination_length=8, min_combination_length=3):
+    results = []
+    feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
+    feature_combinations = generate_feature_combinations(feature_sets, max_combination_length, min_combination_length)
+    print(f'Number of combinations: {len(feature_combinations)}')
+
+    for combo in feature_combinations:
+        print(f'Feature set: {combo}')
+
+        # Reset train_feats and test_feats to base features at the beginning of each combination
+        train_feats = base_train_feats.copy()
+        test_feats = base_test_feats.copy()
+        print(f'Base train size: {base_train_feats.shape}')
+
+        for feature_set in combo:
+            train_feat_set = load_feature_set(base_dir, feature_set, is_train=True)
+            test_feat_set = load_feature_set(base_dir, feature_set, is_train=False)
+
+            train_feats = train_feats.merge(train_feat_set, on=['id'], how='left')
+            test_feats = test_feats.merge(test_feat_set, on=['id'], how='left')
+
+        target_col = ['score']
+        drop_cols = ['id']
+        train_cols = [col for col in train_feats.columns if col not in target_col + drop_cols]
+
+        missing_cols = [col for col in train_cols if col not in test_feats.columns]
+        missing_cols_df = pd.DataFrame({col: np.nan for col in missing_cols}, index=test_feats.index)
+        test_feats = pd.concat([test_feats, missing_cols_df], axis=1)
+
+        train_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+        test_feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+        print(train_feats.shape, test_feats.shape)
+
+        _, oof_preds, rmse, _ = cv_pipeline(train_feats, test_feats, params, seed, n_repeats, n_splits)
+        improvement = baseline_metrics - rmse
+        results.append({'Feature Combination': combo, 'Metric': rmse, 'Improvement': improvement})
+        print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
+
+    return pd.DataFrame(results)
+
+def generate_feature_combinations(feature_sets, max_length, min_length=2):
+    all_combinations = []
+    for r in range(min_length, max_length + 1):
+        for combo in combinations(feature_sets, r):
+            all_combinations.append(combo)
+    return all_combinations
+
+# Example usage of the function
+# base_train_feats, base_test_feats, params, baseline_metrics need to be defined.
+# results_df = compare_feature_combinations(base_dir, base_train_feats, base_test_feats, params, baseline_metrics)
+
 
 def create_specific_balanced_datasets(train_scores, scores_to_split=[3, 3.5, 4, 4.5], pct_to_remv=0.1, n_datasets=2, seed=42):
 
