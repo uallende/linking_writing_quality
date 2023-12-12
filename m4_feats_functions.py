@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import copy, re
+import polars as pl
 
 from tqdm import tqdm
 from collections import Counter
@@ -818,8 +819,6 @@ def normalise_up_down_times(logs):
     logs = logs.drop(columns=['up_time'])
     logs = logs.rename(columns={'down_time':'original_start_time','ad_down_time':'down_time','ad_up_time':'up_time' })
     return logs
-
-import polars as pl
 
 def word_change_stats(train_logs, test_logs):
 

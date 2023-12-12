@@ -50,10 +50,11 @@ def lgb_pipeline(train, test, n_splits=10, iterations=5):
             valid_preds = pd.concat([valid_preds, tmp_df])
 
         final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}.')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}')
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
     return test_preds, valid_preds, final_rmse, cv_rmse 
 
 
@@ -90,8 +91,9 @@ def xgb_pipeline(train, test, n_splits=10, iterations=5):
             valid_preds = pd.concat([valid_preds, tmp_df])
 
         final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}.')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}')
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
     return test_preds, valid_preds, final_rmse, cv_rmse 
