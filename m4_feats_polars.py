@@ -42,63 +42,82 @@ def countvectorize_one_one(train_logs, test_logs):
 
     return data[0], data[1]
 
+#POLARS
 def down_time_padding(train_logs, test_logs, time_agg):
 
-    padded = []
-
+    data = []
     for logs in [train_logs, test_logs]:
+    # bin original logs
+        logs_binned = logs.clone()
+        logs_binned = logs_binned.with_columns((pl.col('down_time') / 1000).alias('down_time_sec'))
+        logs_binned = logs_binned.with_columns(((pl.col('down_time_sec') // time_agg) * time_agg).alias('time_bin'))
 
-        # add time bins to original logs
-        logs_binned = logs.copy()
-        logs_binned['down_time_sec'] = logs_binned['down_time'] / 1000
-        logs_binned['time_bin'] = logs_binned['down_time_sec'].apply(lambda x: time_agg * (x // time_agg))
+        grp_binned = logs_binned.group_by(['id', 'time_bin']).agg(pl.max('word_count'))
+        grp_binned = grp_binned.with_columns(pl.col('time_bin').cast(pl.Int64))
+        grp_binned = grp_binned.sort([pl.col('id'), pl.col('time_bin')])
 
-        # bin logs without padding
-        grp_binned = logs_binned.groupby(['id', 'time_bin'])['word_count'].max().reset_index() 
+        # get max down_time value from logs
+        max_logs = logs.clone()
+        max_down_time = max_logs.group_by(['id']).agg(pl.max('down_time') / 1000)
+        max_down_time = max_down_time.with_columns([pl.col('down_time').cast(pl.Int64)])
 
-        # upper bound for padding
-        logs_pad = logs.copy()
-        max_down_time = logs_pad.groupby('id')['down_time'].max()
-        max_down_time /= 1000
+        padding_dataframes = []
+        max_down_time = max_down_time.collect()
 
-        pad_df = pd.DataFrame()
-        for id, max_time in max_down_time.items():
-            time_steps = list(range(0, int(max_time) + time_agg, time_agg))
-            padding_df = pd.DataFrame({'id': id, 'time_bin': time_steps})
-            pad_df = pd.concat([pad_df, padding_df])
-            pad_df.append(pad_df)
+        # Iterate over each row in max_down_time_df
+        for row in max_down_time.rows():
+            id_value, max_time_value = row[0], row[1]  # Access by index
 
-        # right join padded bins and ffill
-        grp_df = grp_binned.merge(pad_df, on=['id', 'time_bin'], how='right')
-        grp_df = grp_df.ffill()
-        padded.append(grp_df)
+            # Generate time steps
+            time_steps = list(range(0, max_time_value + time_agg, time_agg))
 
-    return padded[0], padded[1]
+            # Create padding DataFrame with the correct types
+            padding_df = pl.DataFrame({
+                'id': [str(id_value)] * len(time_steps),
+                'time_bin': time_steps
+            })
 
-# need to convert to polars
+            padding_dataframes.append(padding_df)
+
+        pad_df = pl.concat(padding_dataframes).lazy()
+        grp_df = pad_df.join(grp_binned.lazy(), on=['id', 'time_bin'], how='left')
+        grp_df = grp_df.sort([pl.col('id'), pl.col('time_bin')])
+        grp_df = grp_df.with_columns(pl.col('word_count').fill_null(strategy="forward").over('id'))
+        data.append(grp_df.collect())
+
+    return data[0].lazy(), data[1].lazy()
+
+# POLARS
 def rate_of_change_feats(train_logs, test_logs):
 
-    AGGREGATIONS = ['count', 'mean', 'std', 'sum', 'max', q1, 'median', q3, 'skew', pd.DataFrame.kurt] #, ] 'min', ,
     feats = []
-    for logs in [train_logs, test_logs]:
+    for data in [train_logs, test_logs]:
 
-        # df = logs.copy()
-        # max_down_time = df.groupby('id')['down_time'].max()
-        # max_down_time /= 1000
-# 
-        # df = logs[['id', 'down_time', 'word_count']].copy()
-        # df['down_time_sec'] = df['down_time'] / 1000
-        # df['time_bin'] = df['down_time_sec'].apply(lambda x: time_agg * (x // time_agg))
-        # grp_df = df.groupby(['id', 'time_bin'])['word_count'].max().reset_index()
-# 
-        word_count_diff = logs.groupby('id')['word_count'].diff().fillna(0)
-        time_bin_diff = logs.groupby('id')['time_bin'].diff().fillna(0)
-        logs['rate_of_change'] = (word_count_diff / time_bin_diff).fillna(0)
+        logs = data.clone()
+        logs = logs.sort('id')
+        logs = logs.with_columns([
+            pl.col('word_count').diff().over('id').alias('word_count_diff'),
+            pl.col('time_bin').diff().over('id').alias('time_bin_diff')
+        ]).fill_nan(0)
 
-        stats = logs[['id','rate_of_change']].groupby(['id']).agg(AGGREGATIONS)
-        stats.columns = ['_'.join(x) for x in stats.columns]
+        logs = logs.with_columns(
+            (pl.col('word_count_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')).fill_nan(0)
+
+        # Aggregating
+        stats = logs.group_by('id').agg([
+            pl.col('rate_of_change').count().alias('roc_count'),
+            pl.col('rate_of_change').mean().alias('roc_mean'),
+            pl.col('rate_of_change').std().alias('roc_std'),
+            pl.col('rate_of_change').sum().alias('roc_sum'),
+            pl.col('rate_of_change').max().alias('roc_max'),
+            pl.col('rate_of_change').quantile(0.25).alias('roc_q1'),
+            pl.col('rate_of_change').median().alias('roc_median'),
+            pl.col('rate_of_change').quantile(0.75).alias('roc_q3'),
+            pl.col('rate_of_change').kurtosis().alias('roc_kurt'),
+            pl.col('rate_of_change').skew().alias('roc_skew'),
+        ])
+
         feats.append(stats)
-
     return feats[0], feats[1]
 
 def wc_acceleration_feats(train_logs, test_logs, time_agg):
