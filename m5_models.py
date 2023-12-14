@@ -45,6 +45,10 @@ def run_lgb_cv(train_feats, test_feats, train_cols, target_col, lgb_params, boos
             tmp_df['iteration'] = i + 1
             oof_results = pd.concat([oof_results, tmp_df])
 
+
+
+                
+
     avg_preds = oof_results.groupby(['id','score'])['prediction'].mean().reset_index()
     rmse = mean_squared_error(avg_preds['score'], avg_preds['prediction'], squared=False)
     print(f"LGBM Average RMSE over {n_repeats * n_splits} folds: {rmse:.6f}")
@@ -89,6 +93,7 @@ def cv_pipeline(train_feats, test_feats, lgb_params, boosting_type, seed=42, n_r
     
     rmse_per_iteration = oof_preds.groupby('iteration').apply(calculate_rmse)
     print(f'Mean RMSE of all iterations: {np.mean(rmse_per_iteration):.6f}')
+    
 
     return test_preds, oof_preds, rmse, model
 

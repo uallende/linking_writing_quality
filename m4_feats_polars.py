@@ -89,9 +89,64 @@ def down_time_padding(train_logs, test_logs, time_agg):
 
     return data[0], data[1]
 
+def count_of_activities(train_logs, test_logs):
+    def count_by_values(df, colname, values):
+        fts = df.select(pl.col('id').unique(maintain_order=True))
+        for i, value in enumerate(values):
+            tmp_df = df.group_by('id').agg(pl.col(colname).is_in([value]).sum().alias(f'{colname}_{i}_cnt'))
+            fts  = fts.join(tmp_df, on='id', how='left') 
+        return fts
+
+    feats = []
+    activities = ['Input', 'Remove/Cut', 'Nonproduction', 'Replace', 'Paste']
+
+    for logs in [train_logs, test_logs]:
+        counts = logs.clone()
+        counts = count_by_values(counts, 'activity', activities)
+        feats.append(counts)
+
+    return feats[0], feats[1]
+
+def events_counts(train_logs, test_logs, n_events=20):
+    feats = []
+
+    for logs in [train_logs, test_logs]:
+        data = logs.clone()
+        events = (data
+                  .group_by(['down_event'])
+                  .agg(pl.count())
+                  .sort('count', descending=True)
+                  .head(n_events).collect()
+                  .select('down_event')
+                  .to_series().to_list())
+
+        event_stats = (logs
+                       .filter(pl.col('down_event').is_in(events))
+                       .group_by(['id', 'down_event'])
+                       .agg(pl.count()).collect()
+                       .pivot(values='count', index='id', columns='down_event')
+                      )
+
+        # Rename columns to a generic format
+        cols = event_stats.columns[1:]  # Skip the 'id' column
+        for i, col in enumerate(cols):
+            event_stats = event_stats.rename({col: f'event_{i+1}'})
+
+        feats.append(event_stats.fill_null(0).lazy())
+
+    # Ensure that feats are evaluated LazyFrames
+    feats = [feat.collect() for feat in feats]
+
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
+    return feats[0].lazy(), feats[1].lazy()
+
 # POLARS
 def rate_of_change_feats(train_logs, test_logs, time_agg=5):
-
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -141,6 +196,23 @@ def events_stats_feats(train_logs, test_logs, time_agg=5):
             eid_stats_q3 = pl.col('event_id').quantile(0.75),
             eid_stats_kurt = pl.col('event_id').kurtosis(),
             eid_stats_skew = pl.col('event_id').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def action_time_feats(train_logs, test_logs):
+    feats = []
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            action_time_mean = pl.col('action_time').mean(),
+            action_time_std = pl.col('action_time').std(),
+            action_time_max = pl.col('action_time').max(),
+           # action_time_q1 = pl.col('action_time').quantile(0.25),
+           # action_time_median = pl.col('action_time').median(),
+           # action_time_q3 = pl.col('action_time').quantile(0.75),
+           # action_time_kurt = pl.col('action_time').kurtosis(),
+           # action_time_skew = pl.col('action_time').skew(),
         )
         feats.append(stats)
     return feats[0], feats[1]
