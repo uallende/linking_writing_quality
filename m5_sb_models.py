@@ -16,14 +16,8 @@ def train_valid_split(data_x, data_y, train_idx, valid_idx):
 def calculate_rmse(y, yhat):
     return mean_squared_error(y, yhat, squared=False)
 
-def lgb_pipeline(train, test, n_splits=10, iterations=5):
+def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
         
-    param = {'n_estimators': 1024,
-    'learning_rate': 0.005,
-    'metric': 'rmse',
-    'force_col_wise': True,
-    'verbosity': 0}
-
     x = train.drop(['id', 'score'], axis=1)
     y = train['score'].values
     test_x = test.drop(columns = ['id'])
@@ -54,7 +48,7 @@ def lgb_pipeline(train, test, n_splits=10, iterations=5):
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
     print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, cv_rmse 
 
 

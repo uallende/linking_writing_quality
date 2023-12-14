@@ -90,11 +90,13 @@ def down_time_padding(train_logs, test_logs, time_agg):
     return data[0], data[1]
 
 # POLARS
-def rate_of_change_feats(train_logs, test_logs):
+def rate_of_change_feats(train_logs, test_logs, time_agg=5):
 
     feats = []
-    for data in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
 
+    for data in [tr_pad, ts_pad]:
         logs = data.clone()
         logs = logs.sort('id')
         logs = logs.with_columns([
@@ -119,7 +121,27 @@ def rate_of_change_feats(train_logs, test_logs):
             pl.col('rate_of_change').kurtosis().alias('roc_kurt'),
             pl.col('rate_of_change').skew().alias('roc_skew'),
         ])
+        feats.append(stats)
+    return feats[0], feats[1]
 
+def events_stats_feats(train_logs, test_logs, time_agg=5):
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for data in [tr_pad, ts_pad]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            eid_stats_sum = pl.col('event_id').sum(),
+            eid_stats_mean = pl.col('event_id').mean(),
+            eid_stats_std = pl.col('event_id').std(),
+            eid_stats_max = pl.col('event_id').max(),
+            eid_stats_q1 = pl.col('event_id').quantile(0.25),
+            eid_stats_median = pl.col('event_id').median(),
+            eid_stats_q3 = pl.col('event_id').quantile(0.75),
+            eid_stats_kurt = pl.col('event_id').kurtosis(),
+            eid_stats_skew = pl.col('event_id').skew(),
+        )
         feats.append(stats)
     return feats[0], feats[1]
 
@@ -286,3 +308,26 @@ def get_keys_pressed_per_second(logs):
     temp_df = temp_df.merge(temp_df_2, on='id', how='left')
     temp_df['keys_per_second'] = temp_df['keys_pressed'] / ((temp_df['max_up_time'] - temp_df['min_down_time']) / 1000)
     return temp_df[['id', 'keys_per_second']]
+
+def create_pauses(train_logs, test_logs):
+
+    feats = []
+    print("< Idle time features >")
+
+    for logs in [train_logs, test_logs]:
+        df = logs.clone()
+        temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
+        temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
+        temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        temp = temp.group_by("id").agg(inter_key_largest_lantency = pl.max('time_diff'),
+                                        inter_key_median_lantency = pl.median('time_diff'),
+                                        mean_pause_time = pl.mean('time_diff'),
+                                        std_pause_time = pl.std('time_diff'),
+                                        total_pause_time = pl.sum('time_diff'),
+                                        pauses_half_sec = pl.col('time_diff').filter((pl.col('time_diff') > 0.5) & (pl.col('time_diff') < 1)).count(),
+                                        pauses_1_sec = pl.col('time_diff').filter((pl.col('time_diff') > 1) & (pl.col('time_diff') < 1.5)).count(),
+                                        pauses_1_half_sec = pl.col('time_diff').filter((pl.col('time_diff') > 1.5) & (pl.col('time_diff') < 2)).count(),
+                                        pauses_2_sec = pl.col('time_diff').filter((pl.col('time_diff') > 2) & (pl.col('time_diff') < 3)).count(),
+                                        pauses_3_sec = pl.col('time_diff').filter(pl.col('time_diff') > 3).count(),)
+        feats.append(temp)
+    return feats[0], feats[1]
