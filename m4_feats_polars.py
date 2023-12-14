@@ -217,6 +217,23 @@ def action_time_feats(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
+def cursor_stats_feats(train_logs, test_logs):
+    feats = []
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            action_time_mean = pl.col('cursor_position').mean(),
+            action_time_std = pl.col('cursor_position').std(),
+            action_time_max = pl.col('cursor_position').max(),
+            action_time_q1 = pl.col('cursor_position').quantile(0.25),
+            action_time_median = pl.col('cursor_position').median(),
+            action_time_q3 = pl.col('cursor_position').quantile(0.75),
+            action_time_kurt = pl.col('cursor_position').kurtosis(),
+            action_time_skew = pl.col('cursor_position').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
+
 # POLARS
 def rate_of_change_events(train_logs, test_logs):
 
