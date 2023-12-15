@@ -1,9 +1,11 @@
 import pandas as pd
 import polars as pl
+import numpy as np
 import re
 
 from sklearn.feature_extraction.text import CountVectorizer
 from m4_feats_functions import getEssays
+from scipy.stats import skew, kurtosis
 
 # POLARS
 def normalise_up_down_times(train_logs, test_logs):
@@ -54,7 +56,8 @@ def down_time_padding(train_logs, test_logs, time_agg):
         logs_binned = logs_binned.with_columns(((pl.col('down_time_sec') // time_agg) * time_agg).alias('time_bin'))
 
         grp_binned = logs_binned.group_by(['id', 'time_bin']).agg(pl.max('word_count'),
-                                                                  pl.count('event_id'))
+                                                                  pl.count('event_id'),
+                                                                  pl.max('cursor_position'))
         grp_binned = grp_binned.with_columns(pl.col('time_bin').cast(pl.Int64))
         grp_binned = grp_binned.sort([pl.col('id'), pl.col('time_bin')])
 
@@ -89,6 +92,34 @@ def down_time_padding(train_logs, test_logs, time_agg):
 
     return data[0], data[1]
 
+def input_text_change_feats(train_logs, test_logs):
+
+    print("< Input text change features >") # character level - not word level as opposed to essays feats
+    feats = []
+    for data in [train_logs, test_logs]:
+        df = data.clone()
+        temp = df.filter((~pl.col('text_change').str.contains('=>')) & (pl.col('text_change') != 'NoChange'))
+        temp = temp.group_by('id').agg(pl.col('text_change').str.concat('').str.extract_all(r'q+'))
+        temp = temp.with_columns(
+                                    input_text_count = pl.col('text_change').list.len(),
+                                    input_text_len_mean = pl.col('text_change').map_elements(lambda x: np.mean([len(i) for i in x] if len(x) > 0 else 0)),
+                                    input_text_len_max = pl.col('text_change').map_elements(lambda x: np.max([len(i) for i in x] if len(x) > 0 else 0)),
+                                    input_text_len_std = pl.col('text_change').map_elements(lambda x: np.std([len(i) for i in x] if len(x) > 0 else 0)),
+                                    input_text_len_median = pl.col('text_change').map_elements(lambda x: np.median([len(i) for i in x] if len(x) > 0 else 0)),
+                                    input_text_len_skew = pl.col('text_change').map_elements(lambda x: skew([len(i) for i in x] if len(x) > 0 else 0)))
+        temp = temp.drop('text_change')
+        feats.append(temp)
+
+    # Ensure that feats are evaluated LazyFrames
+    feats = [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+
+    for col in missing_cols:
+        nan_series = pl.repeat(np.nan, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(nan_series)
+
+    return feats[0].lazy(), feats[1].lazy()
+
 def count_of_activities(train_logs, test_logs):
     def count_by_values(df, colname, values):
         fts = df.select(pl.col('id').unique(maintain_order=True))
@@ -107,20 +138,29 @@ def count_of_activities(train_logs, test_logs):
 
     return feats[0], feats[1]
 
+def count_by_values(df, colname, values):
+    fts = df.select(pl.col('id').unique(maintain_order=True))
+    for i, value in enumerate(values):
+        tmp_df = df.group_by('id').agg(pl.col(colname).is_in([value]).sum().alias(f'{colname}_{i}_cnt'))
+        fts  = fts.join(tmp_df, on='id', how='left') 
+    return fts
+
 def events_counts(train_logs, test_logs, n_events=20):
     feats = []
+    print("< Events counts features >")
 
+    events = (train_logs
+            .group_by(['down_event'])
+            .agg(pl.count())
+            .sort('count', descending=True)
+            .head(n_events).collect()
+            .select('down_event')
+            .to_series().to_list())
+    
     for logs in [train_logs, test_logs]:
         data = logs.clone()
-        events = (data
-                  .group_by(['down_event'])
-                  .agg(pl.count())
-                  .sort('count', descending=True)
-                  .head(n_events).collect()
-                  .select('down_event')
-                  .to_series().to_list())
 
-        event_stats = (logs
+        event_stats = (data
                        .filter(pl.col('down_event').is_in(events))
                        .group_by(['id', 'down_event'])
                        .agg(pl.count()).collect()
@@ -147,6 +187,7 @@ def events_counts(train_logs, test_logs, n_events=20):
 
 # POLARS
 def rate_of_change_feats(train_logs, test_logs, time_agg=5):
+    print("< Word counts rate of change features >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -180,6 +221,7 @@ def rate_of_change_feats(train_logs, test_logs, time_agg=5):
     return feats[0], feats[1]
 
 def events_stats_feats(train_logs, test_logs, time_agg=5):
+    print("< Count of events feats >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -218,6 +260,7 @@ def action_time_feats(train_logs, test_logs):
     return feats[0], feats[1]
 
 def cursor_stats_feats(train_logs, test_logs):
+    print("< Cursor changes features >")
     feats = []
     for data in [train_logs, test_logs]:
         logs = data.clone()
@@ -232,6 +275,41 @@ def cursor_stats_feats(train_logs, test_logs):
             action_time_skew = pl.col('cursor_position').skew(),
         )
         feats.append(stats)
+    return feats[0], feats[1]
+
+def p_burst_feats(train_logs, test_logs):
+
+    feats=[]
+    for logs in [train_logs, test_logs]:
+        df=logs.clone()
+
+        temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
+        temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
+        temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        temp = temp.with_columns(pl.col('time_diff')<2)
+
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('time_diff','id').
+            rle_id()).filter(pl.col('time_diff'))
+
+        p_burst = rle_grp.group_by(['id','id_runs']).count()
+
+        p_burst = p_burst.group_by(['id']).agg(
+            burst_count = pl.col('count').count(),
+            burst_mean = pl.col('count').mean(),
+            burst_sum = pl.col('count').sum(),
+            burst_std = pl.col('count').std(),
+            burst_max = pl.col('count').max(),
+            burst_min = pl.col('count').min(),
+            burst_median = pl.col('count').median(),
+            # burst_skew = pl.col('count').skew(),
+            # burst_kurt = pl.col('count').kurtosis(),
+            # burst_q1 = pl.col('count').quantile(0.25),
+            # burst_q3 = pl.col('count').quantile(0.75),
+
+        )
+        feats.append(p_burst)
+
     return feats[0], feats[1]
 
 # POLARS
