@@ -28,23 +28,6 @@ def q1(x):
 def q3(x):
     return x.quantile(0.75)
 
-def countvectorize_one_one(train_logs, test_logs):
-
-    data = []
-    for logs in [train_logs, test_logs]:
-
-        ids = logs.id.unique()
-        essays = getEssays(logs)
-        c_vect = CountVectorizer(ngram_range=(1, 1))
-        toks = c_vect.fit_transform(essays['essay']).todense()
-        toks = toks[:,:16]
-        toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
-        toks_df['id'] = ids
-        toks_df.reset_index(drop=True, inplace=True)
-        data.append(toks_df.fillna(0))
-
-    return data[0], data[1]
-
 #POLARS
 def down_time_padding(train_logs, test_logs, time_agg):
 
@@ -58,13 +41,13 @@ def down_time_padding(train_logs, test_logs, time_agg):
         grp_binned = logs_binned.group_by(['id', 'time_bin']).agg(pl.max('word_count'),
                                                                   pl.count('event_id'),
                                                                   pl.max('cursor_position'))
-        grp_binned = grp_binned.with_columns(pl.col('time_bin').cast(pl.Int64))
+        grp_binned = grp_binned.with_columns(pl.col('time_bin').cast(pl.Float64))
         grp_binned = grp_binned.sort([pl.col('id'), pl.col('time_bin')])
 
         # get max down_time value from logs
         max_logs = logs.clone()
         max_down_time = max_logs.group_by(['id']).agg(pl.max('down_time') / 1000)
-        max_down_time = max_down_time.with_columns([pl.col('down_time').cast(pl.Int64)])
+        # max_down_time = max_down_time.with_columns([pl.col('down_time').cast(pl.Int64)])
 
         padding_dataframes = []
         max_down_time = max_down_time.collect()
@@ -72,9 +55,7 @@ def down_time_padding(train_logs, test_logs, time_agg):
         # Iterate over each row in max_down_time_df
         for row in max_down_time.rows():
             id_value, max_time_value = row[0], row[1]  # Access by index
-
-            # Generate time steps
-            time_steps = list(range(0, max_time_value + time_agg, time_agg))
+            time_steps = list(np.arange(0, max_time_value + time_agg, time_agg))
 
             # Create padding DataFrame with the correct types
             padding_df = pl.DataFrame({
@@ -89,6 +70,24 @@ def down_time_padding(train_logs, test_logs, time_agg):
         grp_df = grp_df.sort([pl.col('id'), pl.col('time_bin')])
         grp_df = grp_df.with_columns(pl.col(['word_count','event_id']).fill_null(strategy="forward").over('id'))
         data.append(grp_df)
+
+    return data[0], data[1]
+
+
+def countvectorize_one_one(train_logs, test_logs):
+
+    data = []
+    for logs in [train_logs, test_logs]:
+
+        ids = logs.id.unique()
+        essays = getEssays(logs)
+        c_vect = CountVectorizer(ngram_range=(1, 1))
+        toks = c_vect.fit_transform(essays['essay']).todense()
+        toks = toks[:,:16]
+        toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+        toks_df['id'] = ids
+        toks_df.reset_index(drop=True, inplace=True)
+        data.append(toks_df.fillna(0))
 
     return data[0], data[1]
 
@@ -143,6 +142,25 @@ def count_by_values(df, colname, values):
         tmp_df = df.group_by('id').agg(pl.col(colname).is_in([value]).sum().alias(f'{colname}_{i}_cnt'))
         fts  = fts.join(tmp_df, on='id', how='left') 
     return fts
+
+def action_time_by_activity(train_logs, test_logs):
+    print("< Action time by activities >")
+
+    feats = []
+    activities = ['Input', 'Remove/Cut', 'Nonproduction', 'Replace', 'Paste']
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+
+        stats = logs.filter(pl.col('activity').is_in(activities)) \
+            .group_by(['id', 'activity']) \
+            .agg(pl.sum('action_time').name.suffix('_sum')) \
+            .collect() \
+            .pivot(values='action_time_sum', index='id', columns='activity') \
+            .fill_null(0)
+
+        feats.append(stats)
+
+    return feats[0].lazy(), feats[1].lazy()
 
 def events_counts(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
@@ -202,6 +220,8 @@ def rate_of_change_feats(train_logs, test_logs, time_agg=5):
         # Aggregating
         stats = logs.group_by('id').agg([
             pl.col('rate_of_change').filter(pl.col('rate_of_change') == 0).count().alias('roc_zro_count'),
+            pl.col('rate_of_change').filter(pl.col('rate_of_change') > 0).count().alias('pos_change_count'),
+            pl.col('rate_of_change').filter(pl.col('rate_of_change') < 0).count().alias('neg_change_count'),
             pl.col('rate_of_change').count().alias('roc_count'),
             pl.col('rate_of_change').mean().alias('roc_mean'),
             pl.col('rate_of_change').std().alias('roc_std'),
@@ -391,10 +411,12 @@ def r_burst_feats(train_logs, test_logs):
     return feats[0], feats[1]
 
 # POLARS
-def rate_of_change_events(train_logs, test_logs):
+def rate_of_change_events(train_logs, test_logs, time_agg=10):
 
     feats = []
-    for data in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+    for data in [tr_pad, ts_pad]:
 
         logs = data.clone()
         logs = logs.sort('id')
@@ -423,13 +445,15 @@ def rate_of_change_events(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def wc_acceleration_feats(train_logs, test_logs, time_agg):
+def wc_acceleration_feats(train_logs, test_logs, time_agg=5):
 
     AGGREGATIONS = ['count', 'mean', 'std', 'min', 'max', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
     feats = []
-    for logs in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+    for data in [tr_pad, ts_pad]:
 
-        df = logs[['id', 'down_time', 'word_count']].copy()
+        df = data[['id', 'down_time', 'word_count']].clone()
         df['down_time_sec'] = df['down_time'] / 1000
         df['time_bin'] = df['down_time_sec'].apply(lambda x: time_agg * (x // time_agg))
         grp_df = df.groupby(['id', 'time_bin'])['word_count'].max().reset_index()
