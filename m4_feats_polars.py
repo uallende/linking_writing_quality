@@ -229,6 +229,28 @@ def categorical_nunique(train_logs, test_logs):
     
     return feats[0], feats[1]
 
+def words_stats_feats(train_logs, test_logs, time_agg=12):
+    print("< Count of events feats >")
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for data in [tr_pad, ts_pad]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            word_count_sum = pl.col('word_count').sum(),
+            word_count_mean = pl.col('word_count').mean(),
+            word_count_std = pl.col('word_count').std(),
+            word_count_max = pl.col('word_count').max(),
+            word_count_q1 = pl.col('word_count').quantile(0.25),
+            word_count_median = pl.col('word_count').median(),
+            word_count_q3 = pl.col('word_count').quantile(0.75),
+            word_count_kurt = pl.col('word_count').kurtosis(),
+            word_count_skew = pl.col('word_count').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
+
 def events_stats_feats(train_logs, test_logs, time_agg=5):
     print("< Count of events feats >")
     feats = []
