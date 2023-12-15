@@ -41,7 +41,7 @@ def countvectorize_one_one(train_logs, test_logs):
         toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
         toks_df['id'] = ids
         toks_df.reset_index(drop=True, inplace=True)
-        data.append(toks_df)
+        data.append(toks_df.fillna(0))
 
     return data[0], data[1]
 
@@ -110,7 +110,6 @@ def input_text_change_feats(train_logs, test_logs):
         temp = temp.drop('text_change')
         feats.append(temp)
 
-    # Ensure that feats are evaluated LazyFrames
     feats = [feat.collect() for feat in feats]
     missing_cols = set(feats[0].columns) - set(feats[1].columns)
 
@@ -146,9 +145,8 @@ def count_by_values(df, colname, values):
     return fts
 
 def events_counts(train_logs, test_logs, n_events=20):
-    feats = []
     print("< Events counts features >")
-
+    feats = []
     events = (train_logs
             .group_by(['down_event'])
             .agg(pl.count())
@@ -159,7 +157,6 @@ def events_counts(train_logs, test_logs, n_events=20):
     
     for logs in [train_logs, test_logs]:
         data = logs.clone()
-
         event_stats = (data
                        .filter(pl.col('down_event').is_in(events))
                        .group_by(['id', 'down_event'])
@@ -176,7 +173,6 @@ def events_counts(train_logs, test_logs, n_events=20):
 
     # Ensure that feats are evaluated LazyFrames
     feats = [feat.collect() for feat in feats]
-
     missing_cols = set(feats[0].columns) - set(feats[1].columns)
 
     for col in missing_cols:
@@ -218,6 +214,19 @@ def rate_of_change_feats(train_logs, test_logs, time_agg=5):
             pl.col('rate_of_change').skew().alias('roc_skew'),
         ])
         feats.append(stats)
+    return feats[0], feats[1]
+
+def categorical_nunique(train_logs, test_logs):
+    print("< Categorical # unique values features >")    
+    feats = []
+
+    for logs in [train_logs, test_logs]:
+        data = logs.clone()
+        temp  = data.group_by("id").agg(
+            pl.n_unique(['activity', 'down_event', 'text_change'])
+            .name.suffix('_nunique'))
+        feats.append(temp)
+    
     return feats[0], feats[1]
 
 def events_stats_feats(train_logs, test_logs, time_agg=5):
@@ -277,8 +286,28 @@ def cursor_stats_feats(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def p_burst_feats(train_logs, test_logs):
+def time_based_cursor_stats_feats(train_logs, test_logs, time_agg=30):
+    print("< Cursor changes features >")
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+    feats = []
+    for data in [tr_pad, ts_pad]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            cursor_pos_mean = pl.col('cursor_position').mean(),
+            cursor_pos_std = pl.col('cursor_position').std(),
+            cursor_pos_max = pl.col('cursor_position').max(),
+            cursor_pos_q1 = pl.col('cursor_position').quantile(0.25),
+            cursor_pos_median = pl.col('cursor_position').median(),
+            cursor_pos_q3 = pl.col('cursor_position').quantile(0.75),
+            cursor_pos_kurt = pl.col('cursor_position').kurtosis(),
+            cursor_pos_skew = pl.col('cursor_position').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
 
+def p_burst_feats(train_logs, test_logs):
+    print("< P-burst features >")    
     feats=[]
     for logs in [train_logs, test_logs]:
         df=logs.clone()
@@ -310,6 +339,33 @@ def p_burst_feats(train_logs, test_logs):
         )
         feats.append(p_burst)
 
+    return feats[0], feats[1]
+
+def r_burst_feats(train_logs, test_logs):
+    print("< R-burst features >")    
+    feats=[]
+    for logs in [train_logs, test_logs]:
+        df=logs.clone()
+        temp = df.with_columns(pl.col('activity').is_in(['Remove/Cut']))
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('activity','id').
+            rle_id()).filter(pl.col('activity'))
+
+        r_burst = rle_grp.group_by(['id','id_runs']).count()
+        r_burst = r_burst.group_by(['id']).agg(
+            r_burst_count = pl.col('count').count(),
+            r_burst_mean = pl.col('count').mean(),
+            r_burst_sum = pl.col('count').sum(),
+            r_burst_std = pl.col('count').std(),
+            r_burst_max = pl.col('count').max(),
+            r_burst_min = pl.col('count').min(),
+            r_burst_median = pl.col('count').median(),
+            # burst_skew = pl.col('count').skew(),
+            # burst_kurt = pl.col('count').kurtosis(),
+            # burst_q1 = pl.col('count').quantile(0.25),
+            # burst_q3 = pl.col('count').quantile(0.75),
+        )
+        feats.append(r_burst)
     return feats[0], feats[1]
 
 # POLARS
