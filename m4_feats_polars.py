@@ -89,6 +89,31 @@ def countvectorize_one_one(train_logs, test_logs):
         toks_df.reset_index(drop=True, inplace=True)
         data.append(toks_df.fillna(0))
 
+    missing_cols = set(data[0]) - set(data[1])
+    for col in missing_cols:
+        data[1][col] = 0
+
+    return data[0], data[1]
+
+def countvectorize_two_one(train_logs, test_logs):
+
+    data = []
+    for logs in [train_logs, test_logs]:
+
+        ids = logs.id.unique()
+        essays = getEssays(logs)
+        c_vect = CountVectorizer(ngram_range=(1, 2))
+        toks = c_vect.fit_transform(essays['essay']).todense()
+        toks = toks[:,:16]
+        toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+        toks_df['id'] = ids
+        toks_df.reset_index(drop=True, inplace=True)
+        data.append(toks_df.fillna(0))
+
+    missing_cols = set(data[0]) - set(data[1])
+    for col in missing_cols:
+        data[1][col] = 0
+
     return data[0], data[1]
 
 def input_text_change_feats(train_logs, test_logs):
@@ -160,6 +185,11 @@ def action_time_by_activity(train_logs, test_logs):
 
         feats.append(stats)
 
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
     return feats[0].lazy(), feats[1].lazy()
 
 def events_counts(train_logs, test_logs, n_events=20):
@@ -250,7 +280,7 @@ def categorical_nunique(train_logs, test_logs):
     return feats[0], feats[1]
 
 def words_stats_feats(train_logs, test_logs, time_agg=12):
-    print("< Count of events feats >")
+    print("< word changes stats >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -329,7 +359,7 @@ def cursor_stats_feats(train_logs, test_logs):
     return feats[0], feats[1]
 
 def time_based_cursor_stats_feats(train_logs, test_logs, time_agg=30):
-    print("< Cursor changes features >")
+    print("< Cursor changes based on time >")
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
     feats = []
@@ -351,6 +381,7 @@ def time_based_cursor_stats_feats(train_logs, test_logs, time_agg=30):
 def p_burst_feats(train_logs, test_logs):
     print("< P-burst features >")    
     feats=[]
+    original_test_ids = test_logs.select('id').unique()  
     for logs in [train_logs, test_logs]:
         df=logs.clone()
 
@@ -381,19 +412,35 @@ def p_burst_feats(train_logs, test_logs):
         )
         feats.append(p_burst)
 
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
     return feats[0], feats[1]
+
+import polars as pl
 
 def r_burst_feats(train_logs, test_logs):
     print("< R-burst features >")    
-    feats=[]
+    feats = []
+    original_test_ids = test_logs.select('id').unique()  
+
     for logs in [train_logs, test_logs]:
-        df=logs.clone()
+        df = logs.clone()
         temp = df.with_columns(pl.col('activity').is_in(['Remove/Cut']))
         rle_grp = temp.with_columns(
-            id_runs = pl.struct('activity','id').
-            rle_id()).filter(pl.col('activity'))
+            id_runs = pl.struct('activity', 'id').rle_id()
+        ).filter(pl.col('activity'))
 
-        r_burst = rle_grp.group_by(['id','id_runs']).count()
+        r_burst = rle_grp.group_by(['id', 'id_runs']).count()
         r_burst = r_burst.group_by(['id']).agg(
             r_burst_count = pl.col('count').count(),
             r_burst_mean = pl.col('count').mean(),
@@ -401,18 +448,27 @@ def r_burst_feats(train_logs, test_logs):
             r_burst_std = pl.col('count').std(),
             r_burst_max = pl.col('count').max(),
             r_burst_min = pl.col('count').min(),
-            r_burst_median = pl.col('count').median(),
-            # burst_skew = pl.col('count').skew(),
-            # burst_kurt = pl.col('count').kurtosis(),
-            # burst_q1 = pl.col('count').quantile(0.25),
-            # burst_q3 = pl.col('count').quantile(0.75),
+            r_burst_median = pl.col('count').median()
         )
         feats.append(r_burst)
+
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
     return feats[0], feats[1]
 
 # POLARS
 def rate_of_change_events(train_logs, test_logs, time_agg=10):
-
+    print("< event_id rate of change >")    
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -447,6 +503,7 @@ def rate_of_change_events(train_logs, test_logs, time_agg=10):
 
 def wc_acceleration_feats(train_logs, test_logs, time_agg=5):
 
+    print("< word count acceleration >")    
     AGGREGATIONS = ['count', 'mean', 'std', 'min', 'max', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
@@ -514,6 +571,7 @@ def get_essay_df(df):
 
 
 def word_feats(df):
+    print("< Essays word feats >")    
     essay_df = df
     df['word'] = df['essay'].apply(lambda x: re.split(' |\\n|\\.|\\?|\\!',x))
     df = df.explode('word')
@@ -527,6 +585,7 @@ def word_feats(df):
 
 
 def sent_feats(df):
+    print("< Essays sentences feats >")    
     df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
     df = df.explode('sent')
     df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
@@ -547,6 +606,7 @@ def sent_feats(df):
 
 
 def parag_feats(df):
+    print("< Essays paragraphs feats >")    
     df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
     df = df.explode('paragraph')
     # Number of characters in paragraphs
@@ -580,9 +640,8 @@ def get_keys_pressed_per_second(logs):
 
 def create_pauses(train_logs, test_logs):
 
-    feats = []
     print("< Idle time features >")
-
+    feats = []
     for logs in [train_logs, test_logs]:
         df = logs.clone()
         temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
