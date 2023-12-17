@@ -68,7 +68,7 @@ def down_time_padding(train_logs, test_logs, time_agg):
         pad_df = pl.concat(padding_dataframes).lazy()
         grp_df = pad_df.join(grp_binned.lazy(), on=['id', 'time_bin'], how='left')
         grp_df = grp_df.sort([pl.col('id'), pl.col('time_bin')])
-        grp_df = grp_df.with_columns(pl.col(['word_count','event_id']).fill_null(strategy="forward").over('id'))
+        grp_df = grp_df.with_columns(pl.col(['word_count','event_id','cursor_position']).fill_null(strategy="forward").over('id'))
         data.append(grp_df)
 
     return data[0], data[1]
@@ -194,7 +194,7 @@ def action_time_by_activity(train_logs, test_logs):
         feats[1] = feats[1].with_columns(zero_series)
     return feats[0].lazy(), feats[1].lazy()
 
-def events_counts(train_logs, test_logs, n_events=20):
+def down_events_counts(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
     feats = []
     events = (train_logs
@@ -232,7 +232,43 @@ def events_counts(train_logs, test_logs, n_events=20):
     return feats[0].lazy(), feats[1].lazy()
 
 # POLARS
-def rate_of_change_feats(train_logs, test_logs, time_agg=5):
+
+def categorical_nunique(train_logs, test_logs):
+    print("< Categorical # unique values features >")    
+    feats = []
+
+    for logs in [train_logs, test_logs]:
+        data = logs.clone()
+        temp  = data.group_by("id").agg(
+            pl.n_unique(['activity', 'down_event', 'text_change'])
+            .name.suffix('_nunique'))
+        feats.append(temp)
+    
+    return feats[0], feats[1]
+
+def word_count_time_based(train_logs, test_logs, time_agg=12):
+    print("< word changes stats >")
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for data in [tr_pad, ts_pad]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            word_count_sum = pl.col('word_count').sum(),
+            word_count_mean = pl.col('word_count').mean(),
+            word_count_std = pl.col('word_count').std(),
+            word_count_max = pl.col('word_count').max(),
+            word_count_q1 = pl.col('word_count').quantile(0.25),
+            word_count_median = pl.col('word_count').median(),
+            word_count_q3 = pl.col('word_count').quantile(0.75),
+            word_count_kurt = pl.col('word_count').kurtosis(),
+            word_count_skew = pl.col('word_count').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def word_counts_rate_of_change(train_logs, test_logs, time_agg=5):
     print("< Word counts rate of change features >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
@@ -268,42 +304,33 @@ def rate_of_change_feats(train_logs, test_logs, time_agg=5):
         feats.append(stats)
     return feats[0], feats[1]
 
-def categorical_nunique(train_logs, test_logs):
-    print("< Categorical # unique values features >")    
-    feats = []
+def wc_acceleration_feats(train_logs, test_logs, time_agg=5):
 
-    for logs in [train_logs, test_logs]:
-        data = logs.clone()
-        temp  = data.group_by("id").agg(
-            pl.n_unique(['activity', 'down_event', 'text_change'])
-            .name.suffix('_nunique'))
-        feats.append(temp)
-    
-    return feats[0], feats[1]
-
-def words_stats_feats(train_logs, test_logs, time_agg=12):
-    print("< word changes stats >")
+    print("< word count acceleration >")    
+    AGGREGATIONS = ['count', 'mean', 'std', 'min', 'max', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
-
     for data in [tr_pad, ts_pad]:
-        logs = data.clone()
-        stats = logs.group_by('id').agg(
-            word_count_sum = pl.col('word_count').sum(),
-            word_count_mean = pl.col('word_count').mean(),
-            word_count_std = pl.col('word_count').std(),
-            word_count_max = pl.col('word_count').max(),
-            word_count_q1 = pl.col('word_count').quantile(0.25),
-            word_count_median = pl.col('word_count').median(),
-            word_count_q3 = pl.col('word_count').quantile(0.75),
-            word_count_kurt = pl.col('word_count').kurtosis(),
-            word_count_skew = pl.col('word_count').skew(),
-        )
+
+        df = data[['id', 'down_time', 'word_count']].clone()
+        df['down_time_sec'] = df['down_time'] / 1000
+        df['time_bin'] = df['down_time_sec'].apply(lambda x: time_agg * (x // time_agg))
+        grp_df = df.groupby(['id', 'time_bin'])['word_count'].max().reset_index()
+
+        word_count_diff = grp_df.groupby('id')['word_count'].diff().fillna(0)
+        time_bin_diff = grp_df.groupby('id')['time_bin'].diff().fillna(0)
+        grp_df['rate_of_change'] = (word_count_diff / time_bin_diff).fillna(0)
+        rate_of_change_diff = grp_df.groupby('id')['rate_of_change'].diff().fillna(0)
+        grp_df['acceleration'] = (rate_of_change_diff / time_bin_diff).fillna(0)
+
+        stats = grp_df[['id','acceleration']].groupby(['id']).agg(AGGREGATIONS)
+        stats.columns = ['_'.join(x) for x in stats.columns]
         feats.append(stats)
+
     return feats[0], feats[1]
 
-def events_stats_feats(train_logs, test_logs, time_agg=5):
+def events_counts_time_based(train_logs, test_logs, time_agg=5):
     print("< Count of events feats >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
@@ -325,7 +352,27 @@ def events_stats_feats(train_logs, test_logs, time_agg=5):
         feats.append(stats)
     return feats[0], feats[1]
 
-def action_time_feats(train_logs, test_logs):
+def events_counts_baseline(train_logs, test_logs):
+    print("< Count of events feats >")
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        stats = logs.group_by('id').agg(
+            eid_stats_sum = pl.col('event_id').sum(),
+            eid_stats_mean = pl.col('event_id').mean(),
+            eid_stats_std = pl.col('event_id').std(),
+            eid_stats_max = pl.col('event_id').max(),
+            eid_stats_q1 = pl.col('event_id').quantile(0.25),
+            eid_stats_median = pl.col('event_id').median(),
+            eid_stats_q3 = pl.col('event_id').quantile(0.75),
+            eid_stats_kurt = pl.col('event_id').kurtosis(),
+            eid_stats_skew = pl.col('event_id').skew(),
+        )
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def action_time_baseline_stats(train_logs, test_logs):
     feats = []
     for data in [train_logs, test_logs]:
         logs = data.clone()
@@ -342,7 +389,7 @@ def action_time_feats(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def cursor_stats_feats(train_logs, test_logs):
+def cursor_pos_baseline(train_logs, test_logs):
     print("< Cursor changes features >")
     feats = []
     for data in [train_logs, test_logs]:
@@ -360,7 +407,7 @@ def cursor_stats_feats(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def time_based_cursor_stats_feats(train_logs, test_logs, time_agg=30):
+def cursor_pos_time_based(train_logs, test_logs, time_agg=30):
     print("< Cursor changes based on time >")
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -377,6 +424,42 @@ def time_based_cursor_stats_feats(train_logs, test_logs, time_agg=30):
             cursor_pos_kurt = pl.col('cursor_position').kurtosis(),
             cursor_pos_skew = pl.col('cursor_position').skew(),
         )
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def cursor_pos_rate_of_change(train_logs, test_logs, time_agg=10):
+    print("< event_id rate of change >")    
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+    for data in [tr_pad, ts_pad]:
+
+        logs = data.clone()
+        logs = logs.sort('id')
+        logs = logs.with_columns([
+            pl.col('cursor_position').diff().over('id').alias('cursor_pos_diff'),
+            pl.col('time_bin').diff().over('id').alias('time_bin_diff')
+        ]).fill_nan(0)
+
+        logs = logs.with_columns(
+            (pl.col('cursor_pos_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')).fill_nan(0)
+
+        # Aggregating
+        stats = logs.group_by('id').agg(
+            cursor_pos_roc_count_zr = pl.col('rate_of_change').filter(pl.col('rate_of_change') == 0).count(),
+            cursor_pos_pst_change_count = pl.col('rate_of_change').filter(pl.col('rate_of_change') > 0).count(),
+            cursor_pos_neg_change_count = pl.col('rate_of_change').filter(pl.col('rate_of_change') < 0).count(),
+            cursor_pos_roc_count = pl.col('rate_of_change').count(),
+            cursor_pos_roc_mean = pl.col('rate_of_change').mean(),
+            cursor_pos_roc_std = pl.col('rate_of_change').std(),
+            cursor_pos_roc_max = pl.col('rate_of_change').max(),
+            cursor_pos_roc_q1 = pl.col('rate_of_change').quantile(0.25),
+            cursor_pos_roc_median = pl.col('rate_of_change').median(),
+            cursor_pos_roc_q3 = pl.col('rate_of_change').quantile(0.75),
+            cursor_pos_roc_kurt = pl.col('rate_of_change').kurtosis(),
+            cursor_pos_roc_skew = pl.col('rate_of_change').skew(),
+        )
+
         feats.append(stats)
     return feats[0], feats[1]
 
@@ -399,13 +482,13 @@ def p_burst_feats(train_logs, test_logs):
         p_burst = rle_grp.group_by(['id','id_runs']).count()
 
         p_burst = p_burst.group_by(['id']).agg(
-            burst_count = pl.col('count').count(),
-            burst_mean = pl.col('count').mean(),
-            burst_sum = pl.col('count').sum(),
-            burst_std = pl.col('count').std(),
-            burst_max = pl.col('count').max(),
-            burst_min = pl.col('count').min(),
-            burst_median = pl.col('count').median(),
+            p_burst_count = pl.col('count').count(),
+            p_burst_mean = pl.col('count').mean(),
+            p_burst_sum = pl.col('count').sum(),
+            p_burst_std = pl.col('count').std(),
+            p_burst_max = pl.col('count').max(),
+            p_burst_min = pl.col('count').min(),
+            p_burst_median = pl.col('count').median(),
             # burst_skew = pl.col('count').skew(),
             # burst_kurt = pl.col('count').kurtosis(),
             # burst_q1 = pl.col('count').quantile(0.25),
@@ -469,7 +552,7 @@ def r_burst_feats(train_logs, test_logs):
     return feats[0], feats[1]
 
 # POLARS
-def rate_of_change_events(train_logs, test_logs, time_agg=10):
+def count_of_events_rate_of_change(train_logs, test_logs, time_agg=10):
     print("< event_id rate of change >")    
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
@@ -501,32 +584,6 @@ def rate_of_change_events(train_logs, test_logs, time_agg=10):
         )
 
         feats.append(stats)
-    return feats[0], feats[1]
-
-def wc_acceleration_feats(train_logs, test_logs, time_agg=5):
-
-    print("< word count acceleration >")    
-    AGGREGATIONS = ['count', 'mean', 'std', 'min', 'max', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
-    feats = []
-    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
-    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
-    for data in [tr_pad, ts_pad]:
-
-        df = data[['id', 'down_time', 'word_count']].clone()
-        df['down_time_sec'] = df['down_time'] / 1000
-        df['time_bin'] = df['down_time_sec'].apply(lambda x: time_agg * (x // time_agg))
-        grp_df = df.groupby(['id', 'time_bin'])['word_count'].max().reset_index()
-
-        word_count_diff = grp_df.groupby('id')['word_count'].diff().fillna(0)
-        time_bin_diff = grp_df.groupby('id')['time_bin'].diff().fillna(0)
-        grp_df['rate_of_change'] = (word_count_diff / time_bin_diff).fillna(0)
-        rate_of_change_diff = grp_df.groupby('id')['rate_of_change'].diff().fillna(0)
-        grp_df['acceleration'] = (rate_of_change_diff / time_bin_diff).fillna(0)
-
-        stats = grp_df[['id','acceleration']].groupby(['id']).agg(AGGREGATIONS)
-        stats.columns = ['_'.join(x) for x in stats.columns]
-        feats.append(stats)
-
     return feats[0], feats[1]
 
 def q1(x):
