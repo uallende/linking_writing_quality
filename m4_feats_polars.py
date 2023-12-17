@@ -74,13 +74,12 @@ def down_time_padding(train_logs, test_logs, time_agg):
     return data[0], data[1]
 
 
-def countvectorize_one_one(train_logs, test_logs):
+def countvectorize_one_one(train_essays, test_essays):
 
     data = []
-    for logs in [train_logs, test_logs]:
+    for essays in [train_essays, test_essays]:
 
-        ids = logs.id.unique()
-        essays = getEssays(logs)
+        ids = essays.id.unique()
         c_vect = CountVectorizer(ngram_range=(1, 1))
         toks = c_vect.fit_transform(essays['essay']).todense()
         toks = toks[:,:16]
@@ -93,19 +92,20 @@ def countvectorize_one_one(train_logs, test_logs):
     for col in missing_cols:
         data[1][col] = 0
 
-    return data[0], data[1]
+    train_feats = pl.DataFrame(data[0]).lazy()
+    test_feats = pl.DataFrame(data[1]).lazy()
+    return train_feats, test_feats
 
-def countvectorize_two_one(train_logs, test_logs):
+def countvectorize_two_one(train_essays, test_essays):
 
     data = []
-    for logs in [train_logs, test_logs]:
+    for essays in [train_essays, test_essays]:
 
-        ids = logs.id.unique()
-        essays = getEssays(logs)
+        ids = essays.id.unique()
         c_vect = CountVectorizer(ngram_range=(1, 2))
         toks = c_vect.fit_transform(essays['essay']).todense()
         toks = toks[:,:16]
-        toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+        toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
         toks_df['id'] = ids
         toks_df.reset_index(drop=True, inplace=True)
         data.append(toks_df.fillna(0))
@@ -114,7 +114,9 @@ def countvectorize_two_one(train_logs, test_logs):
     for col in missing_cols:
         data[1][col] = 0
 
-    return data[0], data[1]
+    train_feats = pl.DataFrame(data[0]).lazy()
+    test_feats = pl.DataFrame(data[1]).lazy()
+    return train_feats, test_feats
 
 def input_text_change_feats(train_logs, test_logs):
 
@@ -625,18 +627,34 @@ def parag_feats(df):
     return paragraph_agg_df
 
 def product_to_keys(logs, essays):
-    essays['product_len'] = essays.essay.str.len()
-    tmp_df = logs[logs.activity.isin(['Input', 'Remove/Cut'])].groupby(['id']).agg({'activity': 'count'}).reset_index().rename(columns={'activity': 'keys_pressed'})
-    essays = essays.merge(tmp_df, on='id', how='left')
-    essays['product_to_keys'] = essays['product_len'] / essays['keys_pressed']
-    return essays[['id', 'product_to_keys']]
 
-def get_keys_pressed_per_second(logs):
-    temp_df = logs[logs['activity'].isin(['Input', 'Remove/Cut'])].groupby(['id']).agg(keys_pressed=('event_id', 'count')).reset_index()
-    temp_df_2 = logs.groupby(['id']).agg(min_down_time=('down_time', 'min'), max_up_time=('up_time', 'max')).reset_index()
-    temp_df = temp_df.merge(temp_df_2, on='id', how='left')
-    temp_df['keys_per_second'] = temp_df['keys_pressed'] / ((temp_df['max_up_time'] - temp_df['min_down_time']) / 1000)
-    return temp_df[['id', 'keys_per_second']]
+    feats = []
+    for log, essay in zip(logs, essays):
+        essay['product_len'] = essay.essay.str.len()
+        tmp_df = log[log.activity.isin(['Input', 'Remove/Cut'])].groupby(['id']).agg({'activity': 'count'}).reset_index().rename(columns={'activity': 'keys_pressed'})
+        essay = essay.merge(tmp_df, on='id', how='left')
+        essay['product_to_keys'] = essay['product_len'] / essay['keys_pressed']
+        feats.append(essay[['id', 'product_to_keys']])
+        
+    tr_feats = pl.DataFrame(feats[0]).lazy()
+    ts_feats = pl.DataFrame(feats[1]).lazy()
+    return tr_feats, ts_feats
+    
+
+def get_keys_pressed_per_second(train_logs, test_logs):
+
+    feats = []
+    for data in [train_logs, test_logs]:
+        logs = data.copy()
+        temp_df = logs[logs['activity'].isin(['Input', 'Remove/Cut'])].groupby(['id']).agg(keys_pressed=('event_id', 'count')).reset_index()
+        temp_df_2 = logs.groupby(['id']).agg(min_down_time=('down_time', 'min'), max_up_time=('up_time', 'max')).reset_index()
+        temp_df = temp_df.merge(temp_df_2, on='id', how='left')
+        temp_df['keys_per_second'] = temp_df['keys_pressed'] / ((temp_df['max_up_time'] - temp_df['min_down_time']) / 1000)
+        feats.append(temp_df[['id', 'keys_per_second']])
+
+    tr_feats = pl.DataFrame(feats[0]).lazy()
+    ts_feats = pl.DataFrame(feats[1]).lazy()
+    return tr_feats, ts_feats
 
 def create_pauses(train_logs, test_logs):
 
