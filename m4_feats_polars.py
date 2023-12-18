@@ -80,7 +80,7 @@ def countvectorize_one_one(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(1, 1))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,:16]
-    toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'one_gram_tok_{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -100,7 +100,7 @@ def countvectorize_two_one(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(2, 2))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,:16]
-    toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
