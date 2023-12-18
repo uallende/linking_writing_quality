@@ -192,7 +192,7 @@ def down_events_counts(train_logs, test_logs, n_events=20):
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .head(20).collect()
+            .head(n_events).collect()
             .select('down_event')
             .to_series().to_list())
 
