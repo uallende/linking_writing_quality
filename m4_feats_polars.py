@@ -7,7 +7,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 from m4_feats_functions import getEssays
 from scipy.stats import skew, kurtosis
 
-# POLARS
 def normalise_up_down_times(train_logs, test_logs):
     new_logs = []
     for logs in [train_logs, test_logs]:
@@ -28,7 +27,6 @@ def q1(x):
 def q3(x):
     return x.quantile(0.75)
 
-#POLARS
 def down_time_padding(train_logs, test_logs, time_agg):
 
     data = []
@@ -189,42 +187,35 @@ def action_time_by_activity(train_logs, test_logs):
 
 def down_events_counts(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
-    feats = []
-    events = (train_logs
+    logs = pl.concat([train_logs, test_logs], how = 'vertical')
+    events = (logs
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .head(n_events).collect()
+            .head(20).collect()
             .select('down_event')
             .to_series().to_list())
+
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+
+    data = logs.clone()
+    event_stats = (data
+                    .filter(pl.col('down_event').is_in(events))
+                    .group_by(['id', 'down_event'])
+                    .agg(pl.count()).collect()
+                    .pivot(values='count', index='id', columns='down_event')
+                    ).fill_null(0).lazy()
     
-    for logs in [train_logs, test_logs]:
-        data = logs.clone()
-        event_stats = (data
-                       .filter(pl.col('down_event').is_in(events))
-                       .group_by(['id', 'down_event'])
-                       .agg(pl.count()).collect()
-                       .pivot(values='count', index='id', columns='down_event')
-                      )
+    # Rename columns to a generic format
+    cols = event_stats.columns[1:]  # Skip the 'id' column
+    for i, col in enumerate(cols):
+        event_stats = event_stats.rename({col: f'down_event_{i+1}'})
 
-        # Rename columns to a generic format
-        cols = event_stats.columns[1:]  # Skip the 'id' column
-        for i, col in enumerate(cols):
-            event_stats = event_stats.rename({col: f'down_event_{i+1}'})
+    tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
+    ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
 
-        feats.append(event_stats.fill_null(0).lazy())
-
-    # Ensure that feats are evaluated LazyFrames
-    feats = [feat.collect() for feat in feats]
-    missing_cols = set(feats[0].columns) - set(feats[1].columns)
-
-    for col in missing_cols:
-        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
-        feats[1] = feats[1].with_columns(zero_series)
-
-    return feats[0].lazy(), feats[1].lazy()
-
-# POLARS
+    return tr_feats, ts_feats
 
 def categorical_nunique(train_logs, test_logs):
     print("< Categorical # unique values features >")    
@@ -365,7 +356,7 @@ def word_count_acceleration(train_logs, test_logs, time_agg=8):
     return feats[0], feats[1]
 
 def events_counts_time_based(train_logs, test_logs, time_agg=5):
-    print("< Count of events feats >")
+    print("< Count of events time based feats >")
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -387,7 +378,7 @@ def events_counts_time_based(train_logs, test_logs, time_agg=5):
     return feats[0], feats[1]
 
 def events_counts_baseline(train_logs, test_logs):
-    print("< Count of events feats >")
+    print("< Count of events baseline feats >")
     feats = []
 
     for data in [train_logs, test_logs]:
