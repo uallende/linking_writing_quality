@@ -77,11 +77,13 @@ def down_time_padding(train_logs, test_logs, time_agg):
 def countvectorize_one_one(train_essays, test_essays):
 
     data = []
+    c_vect = CountVectorizer(ngram_range=(1, 1))
+    c_vect = c_vect.fit(train_essays['essay'])
+
     for essays in [train_essays, test_essays]:
 
         ids = essays.id.unique()
-        c_vect = CountVectorizer(ngram_range=(1, 1))
-        toks = c_vect.fit_transform(essays['essay']).todense()
+        toks = c_vect.transform(essays['essay']).todense()
         toks = toks[:,:16]
         toks_df = pd.DataFrame(columns = [f'tok_{i}' for i in range(toks.shape[1])], data=toks)
         toks_df['id'] = ids
@@ -99,8 +101,9 @@ def countvectorize_one_one(train_essays, test_essays):
 def countvectorize_two_one(train_essays, test_essays):
 
     data = []
+    c_vect = CountVectorizer(ngram_range=(2, 2))
+    
     for essays in [train_essays, test_essays]:
-
         ids = essays.id.unique()
         c_vect = CountVectorizer(ngram_range=(1, 2))
         toks = c_vect.fit_transform(essays['essay']).todense()
@@ -458,6 +461,53 @@ def cursor_pos_rate_of_change(train_logs, test_logs, time_agg=10):
             cursor_pos_roc_q3 = pl.col('rate_of_change').quantile(0.75),
             cursor_pos_roc_kurt = pl.col('rate_of_change').kurtosis(),
             cursor_pos_roc_skew = pl.col('rate_of_change').skew(),
+        )
+
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def cursor_pos_acceleration(train_logs, test_logs, time_agg=6):
+
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for logs in [tr_pad, ts_pad]:
+
+        grp_df = logs.clone()
+        grp_df = grp_df.sort(['id', 'time_bin'])
+
+        grp_df = grp_df.with_columns([
+            pl.col('cursor_position').diff().over('id').fill_null(0).alias('cursor_position_diff'),
+            pl.col('time_bin').diff().over('id').fill_null(0).alias('time_bin_diff'),
+        ])
+
+        grp_df = grp_df.with_columns(
+            (pl.col('cursor_position_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')
+        )
+
+        grp_df = grp_df.with_columns(
+            pl.col('rate_of_change').diff().over('id').fill_nan(0).alias('rate_of_change_diff')
+        )
+
+        grp_df = grp_df.with_columns(
+            (pl.col('rate_of_change_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('acceleration')
+        )
+        grp_df = grp_df.select(pl.col(['id', 'acceleration']))
+
+        stats = grp_df.group_by('id').agg(
+            cursor_pos_acc_zero = pl.col('acceleration').filter(pl.col('acceleration') == 0).count(),
+            cursor_pos_acc_pst = pl.col('acceleration').filter(pl.col('acceleration') > 0).count(),
+            cursor_pos_acc_neg = pl.col('acceleration').filter(pl.col('acceleration') < 0).count(),
+            cursor_pos_acc_sum = pl.col('acceleration').sum(),
+            cursor_pos_acc_mean = pl.col('acceleration').mean(),
+            cursor_pos_acc_std = pl.col('acceleration').std(),
+            cursor_pos_acc_max = pl.col('acceleration').max(),
+            cursor_pos_acc_q1 = pl.col('acceleration').quantile(0.25),
+            cursor_pos_acc_median = pl.col('acceleration').median(),
+            cursor_pos_acc_q3 = pl.col('acceleration').quantile(0.75),
+            cursor_pos_acc_kurt = pl.col('acceleration').kurtosis(),
+            cursor_pos_acc_skew = pl.col('acceleration').skew(),
         )
 
         feats.append(stats)
