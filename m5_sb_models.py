@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
-from m3_model_params import xgb_params
+from itertools import combinations
 
 def train_valid_split(data_x, data_y, train_idx, valid_idx):
     x_train = data_x.iloc[train_idx]
@@ -28,6 +28,41 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
     for iter in range(iterations):
 
         skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+        model = LGBMRegressor(**param, random_state = 42 + iter)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            
+            model.fit(train_x, train_y)
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model 
+
+def lgb_pipeline_kfold(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = KFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
         model = LGBMRegressor(**param, random_state = 42 + iter)
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
@@ -117,18 +152,17 @@ def get_feature_sets_from_folder(folder_path):
 
 import os, gc
 
-def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, train_scores, seed=42, n_repeats=5, n_splits=10):
+def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, baseline_metrics):
     results = []
     feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
     print(feature_sets)
 
     for feature_set in feature_sets:
-        print(feature_set)
+        print(f'Set of features to test: {feature_set}')
         train_feats = load_feature_set(base_dir, feature_set, is_train=True)
         test_feats = load_feature_set(base_dir, feature_set, is_train=False)
 
         if train_feats is not None and test_feats is not None:
-            train_feats = train_feats.merge(train_scores, on=['id'], how='left')
             train_feats = train_feats.merge(base_train_feats, on=['id'], how='left')
             print(train_feats.shape)
             test_feats = test_feats.merge(base_test_feats, on=['id'], how='left')
@@ -144,3 +178,39 @@ def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, b
         else:
             print(f"Skipping feature set {feature_set} due to missing data.")
     return pd.DataFrame(results)
+
+def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, max_combination_length=8, min_combination_length=3):
+    results = []
+    feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
+    feature_combinations = generate_feature_combinations(feature_sets, max_combination_length, min_combination_length)
+    print(f'Number of combinations: {len(feature_combinations)}')
+
+    for combo in feature_combinations:
+        print(f'Feature set: {combo}')
+
+        train_feats = base_train_feats.copy()
+        test_feats = base_test_feats.copy()
+        print(f'Base train size: {base_train_feats.shape}')
+
+        for feature_set in combo:
+            train_feat_set = load_feature_set(base_dir, feature_set, is_train=True)
+            test_feat_set = load_feature_set(base_dir, feature_set, is_train=False)
+
+            train_feats = train_feats.merge(train_feat_set, on=['id'], how='left')
+            test_feats = test_feats.merge(test_feat_set, on=['id'], how='left')
+
+        print(train_feats.shape, test_feats.shape)
+
+        _, oof_preds, rmse, _ = lgb_pipeline(train_feats, test_feats, params)
+        improvement = baseline_metrics - rmse
+        results.append({'Feature Combination': combo, 'Metric': rmse, 'Improvement': improvement})
+        print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
+
+    return pd.DataFrame(results)
+
+def generate_feature_combinations(feature_sets, max_length, min_length=2):
+    all_combinations = []
+    for r in range(min_length, max_length + 1):
+        for combo in combinations(feature_sets, r):
+            all_combinations.append(combo)
+    return all_combinations

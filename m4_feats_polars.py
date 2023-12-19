@@ -4,7 +4,6 @@ import numpy as np
 import re
 
 from sklearn.feature_extraction.text import CountVectorizer
-from m4_feats_functions import getEssays
 from scipy.stats import skew, kurtosis
 
 def normalise_up_down_times(train_logs, test_logs):

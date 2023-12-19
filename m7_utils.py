@@ -1,6 +1,6 @@
 import os, gc
 from itertools import combinations
-from m5_models import *
+from Superseed.m5_models import *
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 def merge_pkl_files(directory):
