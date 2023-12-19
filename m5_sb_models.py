@@ -49,7 +49,7 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
     print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
     print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-    return test_preds, valid_preds, final_rmse, cv_rmse 
+    return test_preds, valid_preds, final_rmse, model 
 
 
 def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
@@ -74,7 +74,7 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
                 verbose=False
                 )
 
-            print(model.best_iteration)
+            #print(model.best_iteration)
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
@@ -90,4 +90,57 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
     print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
     print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
-    return test_preds, valid_preds, final_rmse, cv_rmse 
+    return test_preds, valid_preds, final_rmse, model 
+
+def load_feature_set(base_dir, feature_type, is_train=True):
+    subdir = 'train' if is_train else 'test'
+    prefix = 'train_' if is_train else 'test_'
+    file_path = os.path.join(base_dir, subdir, prefix + feature_type + '.pkl')
+
+    if not os.path.exists(file_path):
+        print(f"Warning: File not found - {file_path}")
+        return None
+
+    return pd.read_pickle(file_path)
+
+def get_feature_sets_from_folder(folder_path):
+    feature_sets = set()
+    for file in os.listdir(folder_path):
+        if file.endswith('.pkl'):
+            feature_set_name = os.path.splitext(file)[0]
+            if feature_set_name.startswith('train_'):
+                feature_set_name = feature_set_name.replace('train_', '')
+            elif feature_set_name.startswith('test_'):
+                feature_set_name = feature_set_name.replace('test_', '')
+            feature_sets.add(feature_set_name)
+    return list(feature_sets)
+
+import os, gc
+
+def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, baseline_metrics, train_scores, seed=42, n_repeats=5, n_splits=10):
+    results = []
+    feature_sets = get_feature_sets_from_folder(os.path.join(base_dir, 'train'))
+    print(feature_sets)
+
+    for feature_set in feature_sets:
+        print(feature_set)
+        train_feats = load_feature_set(base_dir, feature_set, is_train=True)
+        test_feats = load_feature_set(base_dir, feature_set, is_train=False)
+
+        if train_feats is not None and test_feats is not None:
+            train_feats = train_feats.merge(train_scores, on=['id'], how='left')
+            train_feats = train_feats.merge(base_train_feats, on=['id'], how='left')
+            print(train_feats.shape)
+            test_feats = test_feats.merge(base_test_feats, on=['id'], how='left')
+
+            _, oof_results, rmse, _ = lgb_pipeline(train_feats, test_feats, params)
+            improvement = baseline_metrics - rmse
+            results.append({'Feature Set': feature_set, 'Metric': rmse, 'Improvement': improvement})
+            print(f'Features: {feature_set}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
+
+            # Cleanup
+            del train_feats, test_feats, oof_results
+            gc.collect()
+        else:
+            print(f"Skipping feature set {feature_set} due to missing data.")
+    return pd.DataFrame(results)

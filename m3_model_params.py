@@ -34,6 +34,22 @@ lgb_params_2 = {
     'subsample_freq': 0
     }
 
+new_params = {'boosting_type': 'gbdt', 
+              'colsample_bytree': 1.0, 
+              'importance_type': 'split', 
+              'learning_rate': 0.0183, 
+              'max_depth': 6, 'min_child_samples': 49, 
+              'min_child_weight': 0.001, 
+              'min_split_gain': 0.0, 
+              'n_estimators': 338, 
+              'num_leaves': 69, 
+              'reg_alpha': 0.6073, 
+              'reg_lambda': 0.3127, 
+              'subsample': 1.0, 
+              'subsample_for_bin': 200000, 
+              'subsample_freq': 0, 
+              'verbose': -1}
+
 
 lgb_params_2 = {'boosting_type': 'gbdt', 
                 'num_leaves': 16, 
@@ -65,8 +81,7 @@ xgb_params = {
     'min_child_weight': 10,
     'subsample': 0.8,
     'device': 'cuda',
-    'tree_method': 'hist',
-    'n_estimators': 2000 
+    'n_estimators': 1024 
     }
 
 xgb_params_2 = {
@@ -112,38 +127,3 @@ xgb_params_3 = {
     'verbose': -1,
     'device': 'cuda',
     'tree_method': 'hist'}
-
-non_important_feats = [
-        'tok_21',
-        'tok_20',
-        'tok_14',
-        'action_time_min',
-        'tok_15',
-        'tok_23',
-        'tok_16',
-        'tok_22',
-        'tok_17',
-        'tok_24',
-        'tok_25',
-        'tok_18',
-        'tok_19',
-        'up_event_12_count',
-        'cursor_position_change1_quantile',
-        'word_count_change3_quantile',
-        'up_event_15_count',
-        'up_event_10_count',
-        'up_event_2_count',
-        'down_event_15_count',
-        'word_count_change5_quantile',
-        'cursor_position_change5_quantile',
-        'word_count_change3_max',
-        'essay_words_min',
-        'cursor_position_change3_quantile',
-        'word_count_change2_quantile',
-        'word_count_change2_max',
-        'cursor_position_change2_quantile',
-        'essay_words_median',
-        'word_count_change1_quantile',
-        'word_count_change1_max',
-        'tok_26'
-]
