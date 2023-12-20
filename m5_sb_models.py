@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import xgboost as xgb
+import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
@@ -86,6 +87,23 @@ def lgb_pipeline_kfold(train, test, param, n_splits=10, iterations=5):
     print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
 
+def lgb_full_train_set(train, test, param, iterations=50):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        model = LGBMRegressor(**param, random_state = 42 + iter)
+        model.fit(x, y)
+        test_predictions = model.predict(test_x)
+        test_preds.append(test_predictions)
+
+    return test_preds, model 
 
 def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
@@ -103,12 +121,16 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
             
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     verbose=False,
+            #     callbacks=[lgb.early_stopping(250, first_metric_only=True, verbose=False)])
+
             model.fit(
                 train_x, train_y, 
-                eval_set=[(valid_x, valid_y)],
-                verbose=False
-                )
-
+                eval_set=[(valid_x, valid_y)])
+            
             #print(model.best_iteration)
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
@@ -163,10 +185,9 @@ def compare_with_baseline(base_dir, base_train_feats, base_test_feats, params, b
         test_feats = load_feature_set(base_dir, feature_set, is_train=False)
 
         if train_feats is not None and test_feats is not None:
-            train_feats = train_feats.merge(base_train_feats, on=['id'], how='left')
+            train_feats = base_train_feats.merge(train_feats, on=['id'], how='left')
+            test_feats = base_test_feats.merge(test_feats, on=['id'], how='left')
             print(train_feats.shape)
-            test_feats = test_feats.merge(base_test_feats, on=['id'], how='left')
-
             _, oof_results, rmse, _ = lgb_pipeline(train_feats, test_feats, params)
             improvement = baseline_metrics - rmse
             results.append({'Feature Set': feature_set, 'Metric': rmse, 'Improvement': improvement})
@@ -187,10 +208,8 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
 
     for combo in feature_combinations:
         print(f'Feature set: {combo}')
-
         train_feats = base_train_feats.copy()
         test_feats = base_test_feats.copy()
-        print(f'Base train size: {base_train_feats.shape}')
 
         for feature_set in combo:
             train_feat_set = load_feature_set(base_dir, feature_set, is_train=True)
@@ -198,6 +217,7 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
 
             train_feats = train_feats.merge(train_feat_set, on=['id'], how='left')
             test_feats = test_feats.merge(test_feat_set, on=['id'], how='left')
+            print(f'Train feats shape : {train_feats.shape}')
 
         print(train_feats.shape, test_feats.shape)
 

@@ -15,25 +15,6 @@ lgb_params_1 = {
     'verbosity': -1,
     }
 
-lgb_params_2 = {
-    'boosting_type': 'gbdt', 
-    'colsample_bytree': 1.0, 
-    'importance_type': 'split', 
-    'learning_rate': 0.17106535627270134, 
-    'max_depth': 16, 
-    'min_child_samples': 39, 
-    'min_child_weight': 0.001, 
-    'min_split_gain': 0.0, 
-    'n_jobs': None, 
-    'num_leaves': 15, 
-    'reg_alpha': 0.8577521098353755, 
-    'reg_lambda': 0.7679447672996995, 
-    'subsample': 1.0, 
-    'n_estimators': 2000,
-    'subsample_for_bin': 200000, 
-    'subsample_freq': 0
-    }
-
 new_params = {'boosting_type': 'gbdt', 
               'colsample_bytree': 1.0, 
               'importance_type': 'split', 
@@ -49,28 +30,6 @@ new_params = {'boosting_type': 'gbdt',
               'subsample_for_bin': 200000, 
               'subsample_freq': 0, 
               'verbose': -1}
-
-
-lgb_params_2 = {'boosting_type': 'gbdt', 
-                'num_leaves': 16, 
-                'learning_rate': 0.15347777609888505, 
-                'max_depth': 11, 
-                'min_child_samples': 49, 
-                'reg_alpha': 0.011839618542937691, 
-                'reg_lambda': 0.8759242646774177,
-                'objective': 'regression',
-                'n_estimators': 2000}
-
-
-lgb_params_3 = {'boosting_type': 'gbdt', 
-                'num_leaves': 16, 
-                'learning_rate': 0.17129057152457167, 
-                'max_depth': 6, 
-                'min_child_samples': 31, 
-                'reg_alpha': 0.9620195102280669, 
-                'reg_lambda': 0.5531047842086327,
-                'objective': 'regression',
-                'n_estimators': 2000}
 
 xgb_params = {
     'alpha': 1,

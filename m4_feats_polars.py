@@ -6,6 +6,8 @@ import re
 from sklearn.feature_extraction.text import CountVectorizer
 from scipy.stats import skew, kurtosis
 
+pl.set_random_seed(42)
+
 def normalise_up_down_times(train_logs, test_logs):
     new_logs = []
     for logs in [train_logs, test_logs]:
