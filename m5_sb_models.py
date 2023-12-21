@@ -33,7 +33,6 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            
             model.fit(train_x, train_y)
 
             # model.fit(
@@ -54,8 +53,8 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
         final_std = np.std(valid_preds['preds'])
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
 
 def lgb_pipeline_kfold(train, test, param, n_splits=10, iterations=5):
@@ -227,9 +226,15 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
 
         print(train_feats.shape, test_feats.shape)
 
-        _, oof_preds, rmse, _ = lgb_pipeline(train_feats, test_feats, params)
-        improvement = baseline_metrics - rmse
-        results.append({'Feature Combination': combo, 'Metric': rmse, 'Improvement': improvement})
+        set_results = []
+
+        for i in range(15):
+            _, oof_preds, rmse, _ = lgb_pipeline(train_feats, test_feats, params)
+            set_results.append(rmse)
+
+        rmse_mean = np.mean(set_results)
+        improvement = baseline_metrics - rmse_mean
+        results.append({'Feature Combination': combo, 'Metric': rmse_mean, 'Improvement': improvement})
         print(f'Features: {combo}. RMSE: {rmse:.6f}, Improvement: {improvement:.6f}')
 
     return pd.DataFrame(results)
@@ -305,9 +310,6 @@ def lgb_w_pipeline(train, test, param, n_splits=10, iterations=5):
             train_y, valid_y = y[train_index], y[valid_index]
 
             weights = calculate_weights(train.loc[train_index])  # Define this function
-            print(train_index)
-            print(train.loc[train_index][['id','score']].head(20))
-            print(weights[:20])
             lgb_train = lgb.Dataset(train_x, label=train_y, weight=weights)
             model = lgb.train(param, lgb_train)
 

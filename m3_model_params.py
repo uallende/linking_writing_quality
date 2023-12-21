@@ -12,6 +12,7 @@ lgb_params_1 = {
     'num_leaves': 19, 
     'min_child_samples': 46,
     'n_estimators': 2000,
+    'force_col_wise': True,
     'verbosity': -1,
     }
 
