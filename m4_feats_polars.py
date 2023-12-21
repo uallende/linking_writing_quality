@@ -2,6 +2,7 @@ import pandas as pd
 import polars as pl
 import numpy as np
 import re
+from joblib import Parallel, delayed
 
 from sklearn.feature_extraction.text import CountVectorizer
 from scipy.stats import skew, kurtosis
@@ -618,6 +619,103 @@ def cursor_pos_acceleration(train_logs, test_logs, time_agg=6):
         )
 
         feats.append(stats)
+    return feats[0], feats[1]
+
+def create_integrated_iki(logs):
+
+    logs = logs.with_columns(
+        pl.col('action_time').diff()
+        .over('id')
+        .alias('iki')
+        .fill_null(0)
+    )
+    logs = logs.with_columns(
+        pl.col('action_time')
+        .mean()
+        .over('id')
+        .alias('action_time_mean')
+    )
+    logs = logs.with_columns(
+        (pl.col('iki') - pl.col('action_time'))
+        .alias('mean_centering')
+    )
+    logs = logs.with_columns(
+        pl.col('mean_centering')
+        .cum_sum()
+        .over('id')
+        .alias('iki_integrated')
+    )
+
+    logs = logs.select(pl.col(['id','iki_integrated']))
+    return logs
+
+
+def integrated_iki(train_logs, test_logs):
+    print("integrated IKI")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = create_integrated_iki(logs)
+
+        iki_stats = logs.group_by(['id']).agg(
+                        iki_stats_count = pl.col('iki_integrated').count(),
+                        iki_stats_mean = pl.col('iki_integrated').mean(),
+                        iki_stats_sum = pl.col('iki_integrated').sum(),
+                        iki_stats_std = pl.col('iki_integrated').std(),
+                        iki_stats_max = pl.col('iki_integrated').max(),
+                        iki_stats_min = pl.col('iki_integrated').min(),
+                        iki_stats_median = pl.col('iki_integrated').median()
+        )
+        feats.append(iki_stats)
+    return feats[0], feats[1]
+
+def calculate_fluctuations(iki_integrated, q, bin_sizes):
+    Fq = np.zeros(len(bin_sizes))
+    for i, s in enumerate(bin_sizes):
+        segments = int(np.floor(len(iki_integrated) / s))
+        rms = np.zeros(segments)
+        for v in range(segments):
+            segment = iki_integrated[v * s: (v + 1) * s]
+            trend = np.polyfit(np.arange(s), segment, 1)  # linear fit (trend)
+            detrended = segment - np.polyval(trend, np.arange(s))
+            rms[v] = np.sqrt(np.mean(detrended ** 2))
+        Fq[i] = (np.mean(rms ** q)) ** (1 / q) if q != 0 else np.exp(0.5 * np.mean(np.log(rms ** 2)))
+    return Fq
+
+def mfdfla_for_series(series, q_values, bin_sizes):
+    results = []
+    for q in q_values:
+        Fq_values = calculate_fluctuations(series, q, bin_sizes)
+        results.extend(Fq_values)
+    return results
+
+def process_group(series, q_values, bin_sizes):
+    return mfdfla_for_series(series, q_values, bin_sizes)
+
+def calculate_selected_fluctuations_parallel(iki_integrated_df, q_values, bin_sizes, n_jobs=-1):
+    grouped = iki_integrated_df.groupby('id')['iki_integrated']
+    results = Parallel(n_jobs=n_jobs)(delayed(process_group)(group, q_values, bin_sizes) for name, group in grouped)
+    feats = pd.DataFrame(results, index=[name for name, group in grouped])
+    feats.reset_index(inplace=True)
+    columns = ['id'] + [f'Fq_q{q}_bin{s}' for q in q_values for s in bin_sizes]
+    feats.columns = columns
+    return feats
+
+def fractal_stats(train_logs, test_logs):
+
+    feats = []
+    q_values = np.linspace(-15, 15, 2)
+    bin_sizes = [1500, 2500, 3500]
+    for data in [train_logs, test_logs]:
+        
+        logs = data.clone()
+        iki_df = create_integrated_iki(logs)
+        iki_df = iki_df.collect().to_pandas()
+        stats = calculate_selected_fluctuations_parallel(iki_df, q_values, bin_sizes)
+        stats = pl.DataFrame(stats).lazy()
+        feats.append(stats)
+
     return feats[0], feats[1]
 
 def p_burst_feats(train_logs, test_logs):
