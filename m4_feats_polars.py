@@ -706,7 +706,7 @@ def fractal_stats(train_logs, test_logs):
 
     feats = []
     q_values = np.linspace(-15, 15, 2)
-    bin_sizes = [1500, 2500, 3500]
+    bin_sizes = [1500, 2000, 2500]
     for data in [train_logs, test_logs]:
         
         logs = data.clone()
@@ -718,7 +718,7 @@ def fractal_stats(train_logs, test_logs):
 
     return feats[0], feats[1]
 
-def p_burst_feats(train_logs, test_logs):
+def p_burst_feats(train_logs, test_logs, time_agg=2/3):
     print("< P-burst features >")    
     feats=[]
     original_test_ids = test_logs.select('id').unique()  
@@ -727,8 +727,10 @@ def p_burst_feats(train_logs, test_logs):
 
         temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
         temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
-        temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
-        temp = temp.with_columns(pl.col('time_diff')<2)
+        # temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        temp = temp.filter(pl.col('activity').is_in(['Input']))
+
+        temp = temp.with_columns(pl.col('time_diff')< time_agg)
 
         rle_grp = temp.with_columns(
             id_runs = pl.struct('time_diff','id').

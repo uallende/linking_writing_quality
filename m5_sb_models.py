@@ -35,6 +35,12 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
             
             model.fit(train_x, train_y)
+
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
+
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
@@ -234,3 +240,101 @@ def generate_feature_combinations(feature_sets, max_length, min_length=2):
         for combo in combinations(feature_sets, r):
             all_combinations.append(combo)
     return all_combinations
+
+
+def lgb_pipeline_feat_select(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+    models = {}
+    test_preds = []
+    valid_preds = pd.DataFrame()
+    avg_feature_imp = pd.DataFrame({'feature':feature_list, 'importance':np.zeros(len(feature_list))})
+    feature_list = list(x)
+    test_y = np.zeros(len(x))
+
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+        model = LGBMRegressor(**param, random_state = 42 + iter)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            
+            model.fit(train_x, train_y)
+
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
+
+            test_y[valid_index] = model.predict(valid_x, num_iteration=model.best_iteration_)
+            model.booster_.save_model(f'results/model_fold{iter}.txt', num_iteration=model.best_iteration_)
+            importances = model.feature_importances_
+
+            feature_imp = pd.DataFrame({'feature':feature_list, 'importance':importances})
+            feature_imp['importance'] = (feature_imp['importance'] - feature_imp['importance'].min())  / (feature_imp['importance'].max() - feature_imp['importance'].min())
+            avg_feature_imp['importance'] += feature_imp['importance']
+            feature_imp = feature_imp.sort_values(by='importance', ascending=False)
+            feature_imp.to_csv(f'results/model_feat_imp_fold{i}.csv', index=False)
+            print('-'*20)
+
+            eval_rmse = mean_squared_error(y, test_y, squared=False)
+            avg_feature_imp['importance'] /= n_splits
+            avg_feature_imp = avg_feature_imp.sort_values(by='importance', ascending=False)
+            avg_feature_imp.to_csv('results/model_feat_imp_avg.csv', index=False)
+
+    return test_y, eval_rmse, avg_feature_imp
+
+def lgb_w_pipeline(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns=['id'])
+
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            train_x, valid_x = x.iloc[train_index], x.iloc[valid_index]
+            train_y, valid_y = y[train_index], y[valid_index]
+
+            weights = calculate_weights(train.loc[train_index])  # Define this function
+            print(train_index)
+            print(train.loc[train_index][['id','score']].head(20))
+            print(weights[:20])
+            lgb_train = lgb.Dataset(train_x, label=train_y, weight=weights)
+            model = lgb.train(param, lgb_train)
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train.iloc[valid_index][['id', 'score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model
+
+# Placeholder function for calculating weights
+def calculate_weights(train):
+
+    mask_vals = [0.5, 1. , 6. , 1.5, 5.5]
+    weights = np.ones(len(train))
+
+    for val in mask_vals:
+        weights[train['score'] == val] = 1.5
+
+    return weights
