@@ -854,5 +854,13 @@ def create_pauses(train_logs, test_logs):
                                         pauses_1_half_sec = pl.col('time_diff').filter((pl.col('time_diff') > 1.5) & (pl.col('time_diff') < 2)).count(),
                                         pauses_2_sec = pl.col('time_diff').filter((pl.col('time_diff') > 2) & (pl.col('time_diff') < 3)).count(),
                                         pauses_3_sec = pl.col('time_diff').filter(pl.col('time_diff') > 3).count(),)
+        
+        # everything is logged
+        # bursts = 2/3 of a second - input only
+        # inter word pauses
+        # between sentence pauses ?
+        # between paragraph pauses ?
+        # backspace pauses
+        # edit pauses
         feats.append(temp)
     return feats[0], feats[1]
