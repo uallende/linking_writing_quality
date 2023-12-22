@@ -357,7 +357,6 @@ def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-
             model = Ridge(**param, random_state=42 + iter)
             model.fit(train_x, train_y)
             valid_predictions = model.predict(valid_x)
