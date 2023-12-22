@@ -996,6 +996,55 @@ def word_pauses(train_logs, test_logs):
         feats.append(word_pause)
     return feats[0], feats[1]
 
+def sent_pauses(train_logs, test_logs):
+    print("sentences pauses")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.filter(pl.col(['down_event']).is_in(['.', '?', '!']))
+
+        sent_pauses = logs.group_by(['id']).agg(
+                        sen_pause_count = pl.col('action_time').count(),
+                        sen_pause_mean = pl.col('action_time').mean(),
+                        sen_pause_sum = pl.col('action_time').sum(),
+                        sen_pause_std = pl.col('action_time').std(),
+                        sen_pause_max = pl.col('action_time').max(),
+                        sen_pause_min = pl.col('action_time').min(),
+                        sen_pause_median = pl.col('action_time').median(),
+                        sen_pasuse_q1 = pl.col('action_time').quantile(0.25),
+                        sen_pasuse_q3 = pl.col('action_time').quantile(0.75),
+                        sen_pasuse_kurt = pl.col('action_time').kurtosis(),
+                        sen_pasuse_skew = pl.col('action_time').skew(),
+        )
+        feats.append(sent_pauses)
+    return feats[0], feats[1]
+
+def par_pauses(train_logs, test_logs):
+    print("paragraph pauses")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.filter(pl.col(['text_change']).is_in(['\n']))
+
+        par_pauses = logs.group_by(['id']).agg(
+                        par_pause_count = pl.col('action_time').count(),
+                        par_pause_mean = pl.col('action_time').mean(),
+                        par_pause_sum = pl.col('action_time').sum(),
+                        par_pause_std = pl.col('action_time').std(),
+                        par_pause_max = pl.col('action_time').max(),
+                        par_pause_min = pl.col('action_time').min(),
+                        par_pause_median = pl.col('action_time').median(),
+                        par_pasuse_q1 = pl.col('action_time').quantile(0.25),
+                        par_pasuse_q3 = pl.col('action_time').quantile(0.75),
+                        par_pasuse_kurt = pl.col('action_time').kurtosis(),
+                        par_pasuse_skew = pl.col('action_time').skew(),
+        )
+        feats.append(par_pauses)
+    return feats[0], feats[1]
+
+
 
         # everything is logged
         # bursts = 2/3 of a second - input only
