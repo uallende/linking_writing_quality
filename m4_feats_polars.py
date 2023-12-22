@@ -964,3 +964,33 @@ def create_pauses(train_logs, test_logs):
         # edit pauses
         feats.append(temp)
     return feats[0], feats[1]
+
+def word_pauses(train_logs, test_logs)    :
+    print("word pauses")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+
+        logs = logs.with_columns(pl.col('word_count')
+            .diff().over('id')
+            .alias('word_diff'))
+
+        logs = logs.filter(
+            pl.col('word_diff')>0).select(pl.col(['id','action_time']))
+
+        iki_stats = logs.group_by(['id']).agg(
+                        word_pause_count = pl.col('action_time').count(),
+                        word_pause_mean = pl.col('action_time').mean(),
+                        word_pause_sum = pl.col('action_time').sum(),
+                        word_pause_std = pl.col('action_time').std(),
+                        word_pause_max = pl.col('action_time').max(),
+                        word_pause_min = pl.col('action_time').min(),
+                        word_pause_median = pl.col('action_time').median(),
+                        word_pasuse_q1 = pl.col('action_time').quantile(0.25),
+                        word_pasuse_q3 = pl.col('action_time').quantile(0.75),
+                        word_pasuse_kurt = pl.col('action_time').kurtosis(),
+                        word_pasuse_skew = pl.col('action_time').skew(),
+        )
+        feats.append(iki_stats)
+    return feats[0], feats[1]
