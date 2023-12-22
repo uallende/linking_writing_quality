@@ -9,6 +9,16 @@ from scipy.stats import skew, kurtosis
 
 pl.set_random_seed(42)
 
+def amend_event_id_order(train_logs, test_logs):
+    fixed_logs = []
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.sort(pl.col(['id', 'down_time']))
+        logs = logs.with_columns(pl.col('event_id').cumcount().over('id'))
+        fixed_logs.append(logs)
+
+    return fixed_logs[0], fixed_logs[1]
+
 def normalise_up_down_times(train_logs, test_logs):
     new_logs = []
     for logs in [train_logs, test_logs]:
@@ -954,24 +964,15 @@ def create_pauses(train_logs, test_logs):
                                         pauses_1_half_sec = pl.col('time_diff').filter((pl.col('time_diff') > 1.5) & (pl.col('time_diff') < 2)).count(),
                                         pauses_2_sec = pl.col('time_diff').filter((pl.col('time_diff') > 2) & (pl.col('time_diff') < 3)).count(),
                                         pauses_3_sec = pl.col('time_diff').filter(pl.col('time_diff') > 3).count(),)
-        
-        # everything is logged
-        # bursts = 2/3 of a second - input only
-        # inter word pauses
-        # between sentence pauses ?
-        # between paragraph pauses ?
-        # backspace pauses
-        # edit pauses
         feats.append(temp)
     return feats[0], feats[1]
 
-def word_pauses(train_logs, test_logs)    :
+def word_pauses(train_logs, test_logs):
     print("word pauses")    
     feats = []
 
     for data in [train_logs, test_logs]:
         logs = data.clone()
-
         logs = logs.with_columns(pl.col('word_count')
             .diff().over('id')
             .alias('word_diff'))
@@ -979,7 +980,7 @@ def word_pauses(train_logs, test_logs)    :
         logs = logs.filter(
             pl.col('word_diff')>0).select(pl.col(['id','action_time']))
 
-        iki_stats = logs.group_by(['id']).agg(
+        word_pause = logs.group_by(['id']).agg(
                         word_pause_count = pl.col('action_time').count(),
                         word_pause_mean = pl.col('action_time').mean(),
                         word_pause_sum = pl.col('action_time').sum(),
@@ -992,5 +993,14 @@ def word_pauses(train_logs, test_logs)    :
                         word_pasuse_kurt = pl.col('action_time').kurtosis(),
                         word_pasuse_skew = pl.col('action_time').skew(),
         )
-        feats.append(iki_stats)
+        feats.append(word_pause)
     return feats[0], feats[1]
+
+
+        # everything is logged
+        # bursts = 2/3 of a second - input only
+        # inter word pauses
+        # between sentence pauses ?
+        # between paragraph pauses ?
+        # backspace pauses
+        # edit pauses
