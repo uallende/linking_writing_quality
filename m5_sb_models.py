@@ -55,8 +55,8 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
         final_std = np.std(valid_preds['preds'])
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
 
 def lgb_pipeline_kfold(train, test, param, n_splits=10, iterations=5):
