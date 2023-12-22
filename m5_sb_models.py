@@ -6,6 +6,8 @@ from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
 from itertools import combinations
+from sklearn.linear_model import Ridge
+
 
 def train_valid_split(data_x, data_y, train_idx, valid_idx):
     x_train = data_x.iloc[train_idx]
@@ -222,10 +224,9 @@ def compare_feature_combinations(base_dir, base_train_feats, base_test_feats, pa
 
             train_feats = train_feats.merge(train_feat_set, on=['id'], how='left')
             test_feats = test_feats.merge(test_feat_set, on=['id'], how='left')
-            print(f'Train feats shape : {train_feats.shape}')
 
+        print(f'Train feats shape : {train_feats.shape}')
         print(train_feats.shape, test_feats.shape)
-
         set_results = []
 
         for i in range(15):
@@ -340,3 +341,38 @@ def calculate_weights(train):
         weights[train['score'] == val] = 1.5
 
     return weights
+
+def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+
+            model = Ridge(**param, random_state=42 + iter)
+            model.fit(train_x, train_y)
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model 
