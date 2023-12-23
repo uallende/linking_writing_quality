@@ -1,0 +1,38 @@
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Current SDK version is 0.16.1
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Configure stats pid to 93437
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Loading settings from /root/.config/wandb/settings
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Loading settings from /root/Projects/Kaggle/linking-writing/wandb/settings
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': True}
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'SPF_nnMLP.py', 'program_abspath': '/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py', 'program': '/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py'}
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] calling init triggers
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_setup.py:_flush():76] wandb.init called with sweep_config: {}
+config: {}
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_init.py:_log_setup():524] Logging user logs to /root/Projects/Kaggle/linking-writing/wandb/run-20231223_020114-wwajhud2/logs/debug.log
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_init.py:_log_setup():525] Logging internal logs to /root/Projects/Kaggle/linking-writing/wandb/run-20231223_020114-wwajhud2/logs/debug-internal.log
+2023-12-23 02:01:14,617 INFO    MainThread:93437 [wandb_init.py:init():564] calling init triggers
+2023-12-23 02:01:14,618 INFO    MainThread:93437 [wandb_init.py:init():571] wandb.init called with sweep_config: {}
+config: {}
+2023-12-23 02:01:14,618 INFO    MainThread:93437 [wandb_init.py:init():614] starting backend
+2023-12-23 02:01:14,618 INFO    MainThread:93437 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2023-12-23 02:01:14,622 INFO    MainThread:93437 [backend.py:ensure_launched():206] starting backend process...
+2023-12-23 02:01:14,623 INFO    MainThread:93437 [backend.py:ensure_launched():211] started backend process with pid: 108877
+2023-12-23 02:01:14,624 INFO    MainThread:93437 [wandb_init.py:init():624] backend started and connected
+2023-12-23 02:01:14,626 INFO    MainThread:93437 [wandb_init.py:init():716] updated telemetry
+2023-12-23 02:01:14,630 INFO    MainThread:93437 [wandb_init.py:init():749] communicating run to backend with 90.0 second timeout
+2023-12-23 02:01:15,770 INFO    MainThread:93437 [wandb_run.py:_on_init():2254] communicating current version
+2023-12-23 02:01:15,952 INFO    MainThread:93437 [wandb_run.py:_on_init():2263] got version response 
+2023-12-23 02:01:15,952 INFO    MainThread:93437 [wandb_init.py:init():800] starting run threads in backend
+2023-12-23 02:01:18,336 INFO    MainThread:93437 [wandb_run.py:_console_start():2233] atexit reg
+2023-12-23 02:01:18,336 INFO    MainThread:93437 [wandb_run.py:_redirect():2088] redirect: wrap_raw
+2023-12-23 02:01:18,336 INFO    MainThread:93437 [wandb_run.py:_redirect():2153] Wrapping output streams.
+2023-12-23 02:01:18,337 INFO    MainThread:93437 [wandb_run.py:_redirect():2178] Redirects installed.
+2023-12-23 02:01:18,337 INFO    MainThread:93437 [wandb_init.py:init():841] run started, returning control to user process
+2023-12-23 02:01:18,338 INFO    MainThread:93437 [wandb_run.py:_config_callback():1342] config_cb None None {'epochs': 100, 'dropout_rate': 0.1, 'layer_size': 64}
+2023-12-23 02:01:28,156 INFO    MainThread:93437 [wandb_run.py:_finish():1962] finishing run allende-rev/linking-quality-writing/wwajhud2
+2023-12-23 02:01:28,157 INFO    MainThread:93437 [wandb_run.py:_atexit_cleanup():2202] got exitcode: 0
+2023-12-23 02:01:28,157 INFO    MainThread:93437 [wandb_run.py:_restore():2185] restore
+2023-12-23 02:01:28,157 INFO    MainThread:93437 [wandb_run.py:_restore():2191] restore done
+2023-12-23 02:01:34,228 INFO    MainThread:93437 [wandb_run.py:_footer_history_summary_info():3837] rendering history
+2023-12-23 02:01:34,228 INFO    MainThread:93437 [wandb_run.py:_footer_history_summary_info():3869] rendering summary
+2023-12-23 02:01:34,232 INFO    MainThread:93437 [wandb_run.py:_footer_sync_info():3796] logging synced files

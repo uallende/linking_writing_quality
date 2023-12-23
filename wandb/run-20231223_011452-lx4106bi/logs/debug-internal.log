@@ -1,0 +1,209 @@
+2023-12-23 01:14:52,950 INFO    MainThread:94542 [internal.py:wandb_internal():86] W&B internal server running at pid: 94542, started at: 2023-12-23 01:14:52.949690
+2023-12-23 01:14:52,951 INFO    WriterThread:94542 [datastore.py:open_for_write():85] open: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/run-lx4106bi.wandb
+2023-12-23 01:14:52,954 DEBUG   SenderThread:94542 [sender.py:send():382] send: header
+2023-12-23 01:14:52,954 DEBUG   SenderThread:94542 [sender.py:send():382] send: run
+2023-12-23 01:14:53,396 INFO    SenderThread:94542 [dir_watcher.py:__init__():211] watching files in: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files
+2023-12-23 01:14:53,396 INFO    SenderThread:94542 [sender.py:_start_run_threads():1136] run started: lx4106bi with start time 1703294092.317797
+2023-12-23 01:14:53,402 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: check_version
+2023-12-23 01:14:53,402 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: check_version
+2023-12-23 01:14:53,533 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: run_start
+2023-12-23 01:14:53,553 DEBUG   HandlerThread:94542 [system_info.py:__init__():32] System info init
+2023-12-23 01:14:53,554 DEBUG   HandlerThread:94542 [system_info.py:__init__():47] System info init done
+2023-12-23 01:14:53,554 INFO    HandlerThread:94542 [system_monitor.py:start():194] Starting system monitor
+2023-12-23 01:14:53,554 INFO    SystemMonitor:94542 [system_monitor.py:_start():158] Starting system asset monitoring threads
+2023-12-23 01:14:53,555 INFO    SystemMonitor:94542 [interfaces.py:start():190] Started cpu monitoring
+2023-12-23 01:14:53,556 INFO    HandlerThread:94542 [system_monitor.py:probe():214] Collecting system info
+2023-12-23 01:14:53,556 INFO    SystemMonitor:94542 [interfaces.py:start():190] Started disk monitoring
+2023-12-23 01:14:53,557 INFO    SystemMonitor:94542 [interfaces.py:start():190] Started gpu monitoring
+2023-12-23 01:14:53,559 INFO    SystemMonitor:94542 [interfaces.py:start():190] Started memory monitoring
+2023-12-23 01:14:53,559 INFO    SystemMonitor:94542 [interfaces.py:start():190] Started network monitoring
+2023-12-23 01:14:53,575 DEBUG   HandlerThread:94542 [system_info.py:probe():196] Probing system
+2023-12-23 01:14:53,615 DEBUG   HandlerThread:94542 [system_info.py:_probe_git():181] Probing git
+2023-12-23 01:14:53,620 DEBUG   HandlerThread:94542 [system_info.py:_probe_git():189] Probing git done
+2023-12-23 01:14:53,620 DEBUG   HandlerThread:94542 [system_info.py:probe():244] Probing system done
+2023-12-23 01:14:53,620 DEBUG   HandlerThread:94542 [system_monitor.py:probe():223] {'os': 'Linux-5.15.133.1-microsoft-standard-WSL2-x86_64-with-glibc2.35', 'python': '3.10.13', 'heartbeatAt': '2023-12-23T01:14:53.575664', 'startedAt': '2023-12-23T01:14:52.308261', 'docker': None, 'cuda': None, 'args': (), 'state': 'running', 'program': '/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py', 'codePathLocal': 'SPF_nnMLP.py', 'codePath': 'SPF_nnMLP.py', 'git': {'remote': 'https://github.com/uallende/linking_writing_quality.git', 'commit': '6306f497493942b236d6b9bbc599648ba78d3fb6'}, 'email': 'allende.rev@gmail.com', 'root': '/root/Projects/Kaggle/linking-writing', 'host': 'DMI-5CG2243C16', 'username': 'root', 'executable': '/root/miniconda3/envs/torch/bin/python', 'cpu_count': 10, 'cpu_count_logical': 20, 'cpu_freq': {'current': 2803.1979999999985, 'min': 0.0, 'max': 0.0}, 'cpu_freq_per_core': [{'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}, {'current': 2803.198, 'min': 0.0, 'max': 0.0}], 'disk': {'/': {'total': 1006.853931427002, 'used': 90.48423385620117}}, 'gpu': 'NVIDIA RTX A2000 8GB Laptop GPU', 'gpu_count': 1, 'gpu_devices': [{'name': 'NVIDIA RTX A2000 8GB Laptop GPU', 'memory_total': 8589934592}], 'memory': {'total': 15.441761016845703}}
+2023-12-23 01:14:53,620 INFO    HandlerThread:94542 [system_monitor.py:probe():224] Finished collecting system info
+2023-12-23 01:14:53,620 INFO    HandlerThread:94542 [system_monitor.py:probe():227] Publishing system info
+2023-12-23 01:14:53,620 DEBUG   HandlerThread:94542 [system_info.py:_save_pip():52] Saving list of pip packages installed into the current environment
+2023-12-23 01:14:53,621 DEBUG   HandlerThread:94542 [system_info.py:_save_pip():68] Saving pip packages done
+2023-12-23 01:14:53,621 DEBUG   HandlerThread:94542 [system_info.py:_save_conda():75] Saving list of conda packages installed into the current environment
+2023-12-23 01:14:54,397 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_created():271] file/dir created: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/conda-environment.yaml
+2023-12-23 01:14:54,398 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_created():271] file/dir created: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/requirements.txt
+2023-12-23 01:14:55,999 DEBUG   HandlerThread:94542 [system_info.py:_save_conda():87] Saving conda packages done
+2023-12-23 01:14:56,000 INFO    HandlerThread:94542 [system_monitor.py:probe():229] Finished publishing system info
+2023-12-23 01:14:56,004 DEBUG   SenderThread:94542 [sender.py:send():382] send: files
+2023-12-23 01:14:56,004 INFO    SenderThread:94542 [sender.py:_save_file():1392] saving file wandb-metadata.json with policy now
+2023-12-23 01:14:56,009 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: stop_status
+2023-12-23 01:14:56,010 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: stop_status
+2023-12-23 01:14:56,012 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: internal_messages
+2023-12-23 01:14:56,397 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_modified():288] file/dir modified: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/conda-environment.yaml
+2023-12-23 01:14:56,397 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_created():271] file/dir created: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/wandb-metadata.json
+2023-12-23 01:14:56,432 DEBUG   SenderThread:94542 [sender.py:send():382] send: telemetry
+2023-12-23 01:14:56,432 DEBUG   SenderThread:94542 [sender.py:send():382] send: config
+2023-12-23 01:14:56,608 INFO    wandb-upload_0:94542 [upload_job.py:push():131] Uploaded file /tmp/tmph5x3o253wandb/nmrjdge9-wandb-metadata.json
+2023-12-23 01:14:58,433 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:03,434 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:08,434 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:11,009 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: stop_status
+2023-12-23 01:15:11,009 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: internal_messages
+2023-12-23 01:15:11,010 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: stop_status
+2023-12-23 01:15:14,186 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:19,187 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:24,192 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:24,404 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_modified():288] file/dir modified: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/config.yaml
+2023-12-23 01:15:26,008 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: stop_status
+2023-12-23 01:15:26,008 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: stop_status
+2023-12-23 01:15:26,010 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: internal_messages
+2023-12-23 01:15:30,202 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:35,203 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:40,204 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:41,008 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: stop_status
+2023-12-23 01:15:41,009 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: stop_status
+2023-12-23 01:15:41,010 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: internal_messages
+2023-12-23 01:15:46,161 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:49,834 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: partial_history
+2023-12-23 01:15:49,836 DEBUG   SenderThread:94542 [sender.py:send():382] send: history
+2023-12-23 01:15:49,836 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: summary_record
+2023-12-23 01:15:49,838 INFO    SenderThread:94542 [sender.py:_save_file():1392] saving file wandb-summary.json with policy end
+2023-12-23 01:15:49,838 DEBUG   SenderThread:94542 [sender.py:send():382] send: telemetry
+2023-12-23 01:15:49,838 DEBUG   SenderThread:94542 [sender.py:send():382] send: exit
+2023-12-23 01:15:49,838 INFO    SenderThread:94542 [sender.py:send_exit():589] handling exit code: 0
+2023-12-23 01:15:49,838 INFO    SenderThread:94542 [sender.py:send_exit():591] handling runtime: 56
+2023-12-23 01:15:49,838 INFO    SenderThread:94542 [sender.py:_save_file():1392] saving file wandb-summary.json with policy end
+2023-12-23 01:15:49,838 INFO    SenderThread:94542 [sender.py:send_exit():597] send defer
+2023-12-23 01:15:49,839 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,839 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 0
+2023-12-23 01:15:49,839 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,839 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 0
+2023-12-23 01:15:49,839 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 1
+2023-12-23 01:15:49,839 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,839 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 1
+2023-12-23 01:15:49,840 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,840 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 1
+2023-12-23 01:15:49,840 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 2
+2023-12-23 01:15:49,840 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,840 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 2
+2023-12-23 01:15:49,840 INFO    HandlerThread:94542 [system_monitor.py:finish():203] Stopping system monitor
+2023-12-23 01:15:49,840 INFO    HandlerThread:94542 [interfaces.py:finish():202] Joined cpu monitor
+2023-12-23 01:15:49,840 DEBUG   SystemMonitor:94542 [system_monitor.py:_start():172] Starting system metrics aggregation loop
+2023-12-23 01:15:49,841 DEBUG   SystemMonitor:94542 [system_monitor.py:_start():179] Finished system metrics aggregation loop
+2023-12-23 01:15:49,841 INFO    HandlerThread:94542 [interfaces.py:finish():202] Joined disk monitor
+2023-12-23 01:15:49,841 DEBUG   SystemMonitor:94542 [system_monitor.py:_start():183] Publishing last batch of metrics
+2023-12-23 01:15:49,853 INFO    HandlerThread:94542 [interfaces.py:finish():202] Joined gpu monitor
+2023-12-23 01:15:49,853 INFO    HandlerThread:94542 [interfaces.py:finish():202] Joined memory monitor
+2023-12-23 01:15:49,853 INFO    HandlerThread:94542 [interfaces.py:finish():202] Joined network monitor
+2023-12-23 01:15:49,854 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,854 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 2
+2023-12-23 01:15:49,854 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 3
+2023-12-23 01:15:49,854 DEBUG   SenderThread:94542 [sender.py:send():382] send: stats
+2023-12-23 01:15:49,854 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,855 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 3
+2023-12-23 01:15:49,855 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,855 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 3
+2023-12-23 01:15:49,855 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 4
+2023-12-23 01:15:49,855 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,855 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 4
+2023-12-23 01:15:49,856 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,856 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 4
+2023-12-23 01:15:49,856 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 5
+2023-12-23 01:15:49,856 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,856 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 5
+2023-12-23 01:15:49,857 DEBUG   SenderThread:94542 [sender.py:send():382] send: summary
+2023-12-23 01:15:49,857 INFO    SenderThread:94542 [sender.py:_save_file():1392] saving file wandb-summary.json with policy end
+2023-12-23 01:15:49,857 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,857 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 5
+2023-12-23 01:15:49,857 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 6
+2023-12-23 01:15:49,858 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:49,858 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 6
+2023-12-23 01:15:49,858 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:49,858 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 6
+2023-12-23 01:15:49,862 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: status_report
+2023-12-23 01:15:50,066 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 7
+2023-12-23 01:15:50,066 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:50,066 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 7
+2023-12-23 01:15:50,067 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:50,067 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 7
+2023-12-23 01:15:50,410 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_modified():288] file/dir modified: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/config.yaml
+2023-12-23 01:15:50,410 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_created():271] file/dir created: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/wandb-summary.json
+2023-12-23 01:15:50,411 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_created():271] file/dir created: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/output.log
+2023-12-23 01:15:50,836 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: poll_exit
+2023-12-23 01:15:51,839 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 8
+2023-12-23 01:15:51,840 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: poll_exit
+2023-12-23 01:15:51,842 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:51,842 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 8
+2023-12-23 01:15:51,842 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:51,843 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 8
+2023-12-23 01:15:51,843 INFO    SenderThread:94542 [job_builder.py:build():298] Attempting to build job artifact
+2023-12-23 01:15:51,843 INFO    SenderThread:94542 [job_builder.py:_get_source_type():428] is repo sourced job
+2023-12-23 01:15:51,857 INFO    SenderThread:94542 [job_builder.py:build():404] adding wandb-job metadata file
+2023-12-23 01:15:51,862 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 9
+2023-12-23 01:15:51,863 DEBUG   SenderThread:94542 [sender.py:send():382] send: artifact
+2023-12-23 01:15:51,865 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:51,865 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 9
+2023-12-23 01:15:52,411 INFO    Thread-7  :94542 [dir_watcher.py:_on_file_modified():288] file/dir modified: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/output.log
+2023-12-23 01:15:52,602 INFO    SenderThread:94542 [sender.py:send_artifact():1470] sent artifact job-https___github.com_uallende_linking_writing_quality.git_SPF_nnMLP.py - {'id': 'QXJ0aWZhY3Q6NjczMDA2NDk2', 'state': 'COMMITTED', 'artifactSequence': {'id': 'QXJ0aWZhY3RDb2xsZWN0aW9uOjEyNTM0MTYyMQ==', 'latestArtifact': {'id': 'QXJ0aWZhY3Q6NjczMDA2NDk2', 'versionIndex': 2}}}
+2023-12-23 01:15:52,602 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:52,602 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 9
+2023-12-23 01:15:52,602 INFO    SenderThread:94542 [dir_watcher.py:finish():358] shutting down directory watcher
+2023-12-23 01:15:52,838 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: poll_exit
+2023-12-23 01:15:53,412 INFO    SenderThread:94542 [dir_watcher.py:finish():388] scan: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files
+2023-12-23 01:15:53,412 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/config.yaml config.yaml
+2023-12-23 01:15:53,412 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/requirements.txt requirements.txt
+2023-12-23 01:15:53,412 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/output.log output.log
+2023-12-23 01:15:53,412 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/conda-environment.yaml conda-environment.yaml
+2023-12-23 01:15:53,413 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/wandb-summary.json wandb-summary.json
+2023-12-23 01:15:53,413 INFO    SenderThread:94542 [dir_watcher.py:finish():402] scan save: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/wandb-metadata.json wandb-metadata.json
+2023-12-23 01:15:53,413 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 10
+2023-12-23 01:15:53,413 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: poll_exit
+2023-12-23 01:15:53,424 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:53,424 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 10
+2023-12-23 01:15:53,425 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:53,425 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 10
+2023-12-23 01:15:53,425 INFO    SenderThread:94542 [file_pusher.py:finish():175] shutting down file pusher
+2023-12-23 01:15:53,827 INFO    wandb-upload_2:94542 [upload_job.py:push():131] Uploaded file /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/output.log
+2023-12-23 01:15:53,838 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: poll_exit
+2023-12-23 01:15:53,840 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: poll_exit
+2023-12-23 01:15:53,892 INFO    wandb-upload_1:94542 [upload_job.py:push():131] Uploaded file /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/config.yaml
+2023-12-23 01:15:54,093 INFO    wandb-upload_4:94542 [upload_job.py:push():131] Uploaded file /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/wandb-summary.json
+2023-12-23 01:15:54,126 INFO    wandb-upload_0:94542 [upload_job.py:push():131] Uploaded file /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/requirements.txt
+2023-12-23 01:15:54,157 INFO    wandb-upload_3:94542 [upload_job.py:push():131] Uploaded file /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/files/conda-environment.yaml
+2023-12-23 01:15:54,358 INFO    Thread-6 (_thread_body):94542 [sender.py:transition_state():617] send defer: 11
+2023-12-23 01:15:54,358 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:54,359 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 11
+2023-12-23 01:15:54,359 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:54,359 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 11
+2023-12-23 01:15:54,359 INFO    SenderThread:94542 [file_pusher.py:join():181] waiting for file pusher
+2023-12-23 01:15:54,359 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 12
+2023-12-23 01:15:54,360 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:54,360 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 12
+2023-12-23 01:15:54,360 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:54,360 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 12
+2023-12-23 01:15:54,360 INFO    SenderThread:94542 [file_stream.py:finish():595] file stream finish called
+2023-12-23 01:15:54,518 INFO    SenderThread:94542 [file_stream.py:finish():599] file stream finish is done
+2023-12-23 01:15:54,519 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 13
+2023-12-23 01:15:54,519 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:54,519 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 13
+2023-12-23 01:15:54,519 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:54,519 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 13
+2023-12-23 01:15:54,520 INFO    SenderThread:94542 [sender.py:transition_state():617] send defer: 14
+2023-12-23 01:15:54,520 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: defer
+2023-12-23 01:15:54,520 INFO    HandlerThread:94542 [handler.py:handle_request_defer():172] handle defer: 14
+2023-12-23 01:15:54,521 DEBUG   SenderThread:94542 [sender.py:send():382] send: final
+2023-12-23 01:15:54,521 DEBUG   SenderThread:94542 [sender.py:send():382] send: footer
+2023-12-23 01:15:54,521 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: defer
+2023-12-23 01:15:54,521 INFO    SenderThread:94542 [sender.py:send_request_defer():613] handle sender defer: 14
+2023-12-23 01:15:54,522 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: poll_exit
+2023-12-23 01:15:54,522 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: poll_exit
+2023-12-23 01:15:54,523 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: internal_messages
+2023-12-23 01:15:54,524 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: server_info
+2023-12-23 01:15:54,524 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: get_summary
+2023-12-23 01:15:54,525 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: sampled_history
+2023-12-23 01:15:54,525 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: job_info
+2023-12-23 01:15:54,525 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: server_info
+2023-12-23 01:15:54,658 DEBUG   SenderThread:94542 [sender.py:send_request():409] send_request: job_info
+2023-12-23 01:15:54,659 DEBUG   HandlerThread:94542 [handler.py:handle_request():146] handle_request: shutdown
+2023-12-23 01:15:54,659 INFO    HandlerThread:94542 [handler.py:finish():866] shutting down handler
+2023-12-23 01:15:55,527 INFO    WriterThread:94542 [datastore.py:close():294] close: /root/Projects/Kaggle/linking-writing/wandb/run-20231223_011452-lx4106bi/run-lx4106bi.wandb
+2023-12-23 01:15:55,658 INFO    SenderThread:94542 [sender.py:finish():1548] shutting down sender
+2023-12-23 01:15:55,658 INFO    SenderThread:94542 [file_pusher.py:finish():175] shutting down file pusher
+2023-12-23 01:15:55,658 INFO    SenderThread:94542 [file_pusher.py:join():181] waiting for file pusher

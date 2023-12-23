@@ -1,0 +1,10 @@
+
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.login() after wandb.init() has no effect.
+Traceback (most recent call last):
+  File "/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py", line 159, in <module>
+    valid_preds, final_rmse, trained_model = run_experiment(layer_size, dropout_rate, epochs)
+  File "/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py", line 130, in run_experiment
+    valid_preds, final_rmse, trained_model = nn_pipeline(
+  File "/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py", line 101, in nn_pipeline
+    wandb.log({'final_rmse': final_rmse})
+UnboundLocalError: local variable 'final_rmse' referenced before assignment

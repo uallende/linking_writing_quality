@@ -1044,7 +1044,86 @@ def par_pauses(train_logs, test_logs):
         feats.append(par_pauses)
     return feats[0], feats[1]
 
+def essay_sent_words(df):
+    AGGREGATIONS = ['count', 'mean', 'max', 'first', q1, 'median', q3, 'sum']
+    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent')
+    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
+    df['sent_word_count'] = df['sent'].apply(lambda x: len(x.split(' ')))
 
+    sent_agg_df = df[['id','sent_word_count']].groupby(['id']).agg(AGGREGATIONS)
+    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
+    sent_agg_df['id'] = sent_agg_df.index
+    sent_agg_df = sent_agg_df.reset_index(drop=True)
+    sent_agg_df.drop(columns=["sent_word_count_count"], inplace=True)
+    return sent_agg_df
+
+def essay_sent_length(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+
+    print("< Essays sentences feats >")    
+    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent')
+    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
+    df['sent_len'] = df['sent'].apply(lambda x: len(x))
+    df = df[df.sent_len!=0].reset_index(drop=True)
+
+    sent_agg_df = df[['id','sent_len']].groupby(['id']).agg(AGGREGATIONS)
+    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
+    sent_agg_df['id'] = sent_agg_df.index
+    sent_agg_df = sent_agg_df.reset_index(drop=True)
+    sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
+    return sent_agg_df
+
+def essay_par_length(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+
+    print("< Essays paragraphs feats >")    
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['paragraph_len'] = df['paragraph'].apply(lambda x: len(x)) 
+    df = df[df.paragraph_len!=0].reset_index(drop=True)
+    
+    paragraph_agg_df = df[['id','paragraph_len']].groupby(['id']).agg(AGGREGATIONS)
+                                 
+    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
+    paragraph_agg_df['id'] = paragraph_agg_df.index
+    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
+    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+    return paragraph_agg_df
+
+def essay_par_words(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+    print("< Essays paragraphs feats >")    
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['paragraph_word_count'] = df['paragraph'].apply(lambda x: len(x.split(' ')))
+    
+    paragraph_agg_df = df[['id','paragraph_word_count']].groupby(['id']).agg(AGGREGATIONS)
+    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
+    paragraph_agg_df['id'] = paragraph_agg_df.index
+    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
+    paragraph_agg_df.drop(columns=["paragraph_word_count_count"], inplace=True)
+    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+    return paragraph_agg_df
+
+def essay_sents_per_par(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3]
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['sent_per_par'] = df['paragraph'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent_per_par')
+    df['sent_per_par'] = df['sent_per_par'].apply(lambda x: x.replace('\n','').strip())
+    df = df.groupby(['id','paragraph'])['sent_per_par'].count().reset_index()
+    df = df[df['paragraph'].str.strip() != ''].drop('paragraph', axis=1)
+
+    par_sent_df = df[['id','sent_per_par']].groupby(['id']).agg(AGGREGATIONS)
+    par_sent_df.columns = ['_'.join(x) for x in par_sent_df.columns]
+    par_sent_df['id'] = par_sent_df.index
+    par_sent_df = par_sent_df.reset_index(drop=True)
+    par_sent_df = par_sent_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+
+    return par_sent_df
 
         # everything is logged
         # bursts = 2/3 of a second - input only

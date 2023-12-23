@@ -1,0 +1,148 @@
+{
+    "os": "Linux-5.15.133.1-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "python": "3.10.13",
+    "heartbeatAt": "2023-12-23T02:27:54.347322",
+    "startedAt": "2023-12-23T02:27:52.947851",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py",
+    "codePathLocal": "SPF_nnMLP.py",
+    "codePath": "SPF_nnMLP.py",
+    "git": {
+        "remote": "https://github.com/uallende/linking_writing_quality.git",
+        "commit": "6306f497493942b236d6b9bbc599648ba78d3fb6"
+    },
+    "email": "allende.rev@gmail.com",
+    "root": "/root/Projects/Kaggle/linking-writing",
+    "host": "DMI-5CG2243C16",
+    "username": "root",
+    "executable": "/root/miniconda3/envs/torch/bin/python",
+    "cpu_count": 10,
+    "cpu_count_logical": 20,
+    "cpu_freq": {
+        "current": 2803.1979999999985,
+        "min": 0.0,
+        "max": 0.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2803.198,
+            "min": 0.0,
+            "max": 0.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 1006.853931427002,
+            "used": 90.49325180053711
+        }
+    },
+    "gpu": "NVIDIA RTX A2000 8GB Laptop GPU",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA RTX A2000 8GB Laptop GPU",
+            "memory_total": 8589934592
+        }
+    ],
+    "memory": {
+        "total": 15.441761016845703
+    }
+}

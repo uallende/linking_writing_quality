@@ -1,0 +1,24 @@
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Current SDK version is 0.16.1
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Configure stats pid to 92031
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Loading settings from /root/.config/wandb/settings
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Loading settings from /root/Projects/Kaggle/linking-writing/wandb/settings
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': True}
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'SPF_nnMLP.py', 'program_abspath': '/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py', 'program': '/root/Projects/Kaggle/linking-writing/SPF_nnMLP.py'}
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] calling init triggers
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_setup.py:_flush():76] wandb.init called with sweep_config: {}
+config: {}
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_init.py:_log_setup():524] Logging user logs to /root/Projects/Kaggle/linking-writing/wandb/run-20231223_010157-6a4emcko/logs/debug.log
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_init.py:_log_setup():525] Logging internal logs to /root/Projects/Kaggle/linking-writing/wandb/run-20231223_010157-6a4emcko/logs/debug-internal.log
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_init.py:init():564] calling init triggers
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_init.py:init():571] wandb.init called with sweep_config: {}
+config: {}
+2023-12-23 01:01:57,756 INFO    MainThread:92031 [wandb_init.py:init():609] wandb.init() called when a run is still active
+2023-12-23 01:01:57,757 INFO    MainThread:92031 [wandb_run.py:_config_callback():1342] config_cb None None {'epochs': 100, 'dropout_rate': 0.1, 'layer_size': 24}
+2023-12-23 01:02:22,935 INFO    MainThread:92031 [wandb_run.py:_finish():1962] finishing run allende-rev/linking-quality-writing/rx1yh2iu
+2023-12-23 01:02:22,935 INFO    MainThread:92031 [wandb_run.py:_atexit_cleanup():2202] got exitcode: 0
+2023-12-23 01:02:22,935 INFO    MainThread:92031 [wandb_run.py:_restore():2185] restore
+2023-12-23 01:02:22,936 INFO    MainThread:92031 [wandb_run.py:_restore():2191] restore done
+2023-12-23 01:02:26,735 INFO    MainThread:92031 [wandb_run.py:_footer_history_summary_info():3837] rendering history
+2023-12-23 01:02:26,736 INFO    MainThread:92031 [wandb_run.py:_footer_history_summary_info():3869] rendering summary
+2023-12-23 01:02:26,739 INFO    MainThread:92031 [wandb_run.py:_footer_sync_info():3796] logging synced files
