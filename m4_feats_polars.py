@@ -24,10 +24,8 @@ def normalise_up_down_times(train_logs, test_logs):
     for logs in [train_logs, test_logs]:
         min_down_time = logs.group_by('id').agg(pl.min('down_time').alias('min_down_time'))
         logs = logs.join(min_down_time, on='id', how='left')
-        logs = logs.with_columns([
-            (pl.col('down_time') - pl.col('min_down_time')).alias('normalised_down_time'),
-            (pl.col('up_time') + pl.col('action_time')).alias('normalised_up_time')
-        ])
+        logs = logs.with_columns([(pl.col('down_time') - pl.col('min_down_time')).alias('normalised_down_time')])
+        logs = logs.with_columns([(pl.col('normalised_down_time') + pl.col('action_time')).alias('normalised_up_time')])
         logs = logs.drop(['min_down_time', 'down_time', 'up_time'])
         logs = logs.rename({'normalised_down_time': 'down_time', 'normalised_up_time': 'up_time'})
         new_logs.append(logs)
@@ -1124,6 +1122,55 @@ def essay_sents_per_par(df):
     par_sent_df = par_sent_df.rename(columns={"paragraph_len_count":"paragraph_count"})
 
     return par_sent_df
+
+def added_word_pauses_basic(train_logs, test_logs):
+    print("< added words pauses")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.with_columns(pl.col('word_count')
+            .diff().over('id')
+            .alias('word_diff'))
+
+        logs = logs.filter(
+            pl.col('word_diff')>0).select(pl.col(['id','action_time']))
+
+        word_pause = logs.group_by(['id']).agg(
+                        word_pause_count = pl.col('action_time').count(),
+                        word_pause_mean = pl.col('action_time').mean(),
+                        word_pause_sum = pl.col('action_time').sum(),
+                        word_pause_std = pl.col('action_time').std(),
+                        word_pause_median = pl.col('action_time').median(),
+
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
+
+def added_word_pauses_adv(train_logs, test_logs):
+    print("< added words pauses")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.with_columns(pl.col('word_count')
+            .diff().over('id')
+            .alias('word_diff'))
+
+        logs = logs.filter(
+            pl.col('word_diff')>0).select(pl.col(['id','action_time']))
+
+        word_pause = logs.group_by(['id']).agg(
+                        word_pause_max = pl.col('action_time').max(),
+                        word_pause_min = pl.col('action_time').min(),
+                        word_pasuse_q1 = pl.col('action_time').quantile(0.25),
+                        word_pasuse_q3 = pl.col('action_time').quantile(0.75),
+                        word_pasuse_kurt = pl.col('action_time').kurtosis(),
+                        word_pasuse_skew = pl.col('action_time').skew(),
+
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
 
         # everything is logged
         # bursts = 2/3 of a second - input only
