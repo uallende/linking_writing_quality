@@ -407,7 +407,7 @@ def events_counts_baseline(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def events_counts_rate_of_change(train_logs, test_logs, time_agg=10):
+def events_counts_rate_of_change(train_logs, test_logs, time_agg=3):
     print("< event_id rate of change >")    
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
@@ -525,7 +525,7 @@ def cursor_pos_baseline(train_logs, test_logs):
         feats.append(stats)
     return feats[0], feats[1]
 
-def cursor_pos_time_based(train_logs, test_logs, time_agg=30):
+def cursor_pos_time_based(train_logs, test_logs, time_agg=3):
     print("< Cursor changes based on time >")
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
@@ -581,7 +581,7 @@ def cursor_pos_rate_of_change(train_logs, test_logs, time_agg=10):
         feats.append(stats)
     return feats[0], feats[1]
 
-def cursor_pos_acceleration(train_logs, test_logs, time_agg=6):
+def cursor_pos_acceleration(train_logs, test_logs, time_agg=8):
     print("< cursor position acceleration >")    
 
     feats = []
@@ -1146,11 +1146,11 @@ def add_word_pauses_basic(train_logs, test_logs):
 
         word_pause = logs.filter(pl.col('word_diff')>0)
         word_pause = word_pause.group_by(['id']).agg(
-                rmv_words_pause_count = pl.col('down_time_diff').count(),
-                rmv_words_pause_mean = pl.col('down_time_diff').mean(),
-                rmv_words_pause_sum = pl.col('down_time_diff').sum(),
-                rmv_words_pause_std = pl.col('down_time_diff').std(),
-                rmv_words_pause_median = pl.col('down_time_diff').median(),
+                add_words_pause_count = pl.col('down_time_diff').count(),
+                add_words_pause_mean = pl.col('down_time_diff').mean(),
+                add_words_pause_sum = pl.col('down_time_diff').sum(),
+                add_words_pause_std = pl.col('down_time_diff').std(),
+                add_words_pause_median = pl.col('down_time_diff').median(),
         )
         feats.append(word_pause)
     return feats[0], feats[1]
@@ -1179,11 +1179,11 @@ def add_word_pauses_adv(train_logs, test_logs):
 
         word_pause = logs.filter(pl.col('word_diff')>0)
         word_pause = word_pause.group_by(['id']).agg(
-                rmv_words_pause_max = pl.col('down_time_diff').max(),
-                rmv_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
-                rmv_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
-                rmv_words_pause_kurt = pl.col('down_time_diff').kurtosis(),
-                rmv_words_pause_skew = pl.col('down_time_diff').skew(),
+                add_words_pause_max = pl.col('down_time_diff').max(),
+                add_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
+                add_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
+                add_words_pause_kurt = pl.col('down_time_diff').kurtosis(),
+                add_words_pause_skew = pl.col('down_time_diff').skew(),
         )
         feats.append(word_pause)
     return feats[0], feats[1]
@@ -1309,11 +1309,3 @@ def word_timings_adv(train_logs, test_logs):
         )
         feats.append(word_timings)
     return feats[0], feats[1]
-
-        # everything is logged
-        # bursts = 2/3 of a second - input only
-        # inter word pauses
-        # between sentence pauses ?
-        # between paragraph pauses ?
-        # backspace pauses
-        # edit pauses
