@@ -28,7 +28,7 @@ def normalise_up_down_times(train_logs, test_logs):
         logs = logs.with_columns([(pl.col('normalised_down_time') + pl.col('action_time')).alias('normalised_up_time')])
         logs = logs.drop(['min_down_time', 'down_time', 'up_time'])
         logs = logs.rename({'normalised_down_time': 'down_time', 'normalised_up_time': 'up_time'})
-        new_logs.append(logs)
+        new_logs.append(logs.sort(['id','event_id'], descending=[True,True]))
     return new_logs[0], new_logs[1]
 
 # Helper functions
@@ -1123,53 +1123,191 @@ def essay_sents_per_par(df):
 
     return par_sent_df
 
-def added_word_pauses_basic(train_logs, test_logs):
-    print("< added words pauses")    
+def add_word_pauses_basic(train_logs, test_logs):
+    print("< added words pauses basic")    
     feats = []
 
-    for data in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
         logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
         logs = logs.with_columns(pl.col('word_count')
-            .diff().over('id')
-            .alias('word_diff'))
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
 
-        logs = logs.filter(
-            pl.col('word_diff')>0).select(pl.col(['id','action_time']))
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
 
-        word_pause = logs.group_by(['id']).agg(
-                        word_pause_count = pl.col('action_time').count(),
-                        word_pause_mean = pl.col('action_time').mean(),
-                        word_pause_sum = pl.col('action_time').sum(),
-                        word_pause_std = pl.col('action_time').std(),
-                        word_pause_median = pl.col('action_time').median(),
-
+        word_pause = logs.filter(pl.col('word_diff')>0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_count = pl.col('down_time_diff').count(),
+                rmv_words_pause_mean = pl.col('down_time_diff').mean(),
+                rmv_words_pause_sum = pl.col('down_time_diff').sum(),
+                rmv_words_pause_std = pl.col('down_time_diff').std(),
+                rmv_words_pause_median = pl.col('down_time_diff').median(),
         )
         feats.append(word_pause)
     return feats[0], feats[1]
 
-def added_word_pauses_adv(train_logs, test_logs):
-    print("< added words pauses")    
+
+def add_word_pauses_adv(train_logs, test_logs):
+    print("< added words pauses advanced")    
     feats = []
 
-    for data in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
         logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
         logs = logs.with_columns(pl.col('word_count')
-            .diff().over('id')
-            .alias('word_diff'))
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
 
-        logs = logs.filter(
-            pl.col('word_diff')>0).select(pl.col(['id','action_time']))
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
 
-        word_pause = logs.group_by(['id']).agg(
-                        word_pause_max = pl.col('action_time').max(),
-                        word_pause_min = pl.col('action_time').min(),
-                        word_pasuse_q1 = pl.col('action_time').quantile(0.25),
-                        word_pasuse_q3 = pl.col('action_time').quantile(0.75),
-                        word_pasuse_kurt = pl.col('action_time').kurtosis(),
-                        word_pasuse_skew = pl.col('action_time').skew(),
-
+        word_pause = logs.filter(pl.col('word_diff')>0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_max = pl.col('down_time_diff').max(),
+                rmv_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
+                rmv_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
+                rmv_words_pause_kurt = pl.col('down_time_diff').kurtosis(),
+                rmv_words_pause_skew = pl.col('down_time_diff').skew(),
         )
         feats.append(word_pause)
+    return feats[0], feats[1]
+
+def remove_word_pauses_basic(train_logs, test_logs):
+    print("< removed words pauses basic")    
+    feats = []
+
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
+        logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(pl.col('word_count')
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
+
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
+
+        word_pause = logs.filter(pl.col('word_diff')<0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_count = pl.col('down_time_diff').count(),
+                rmv_words_pause_mean = pl.col('down_time_diff').mean(),
+                rmv_words_pause_sum = pl.col('down_time_diff').sum(),
+                rmv_words_pause_std = pl.col('down_time_diff').std(),
+                rmv_words_pause_median = pl.col('down_time_diff').median(),
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
+
+
+def remove_word_pauses_adv(train_logs, test_logs):
+    print("< removed words pauses advanced")    
+    feats = []
+
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
+        logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(pl.col('word_count')
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
+
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
+
+        word_pause = logs.filter(pl.col('word_diff')<0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_max = pl.col('down_time_diff').max(),
+                rmv_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
+                rmv_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
+                rmv_words_pause_kurt = pl.col('down_time_diff').kurtosis(),
+                rmv_words_pause_skew = pl.col('down_time_diff').skew(),
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
+
+def word_timings_basic(train_logs, test_logs):
+    print("< word timings advanced")    
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(
+            pl.cum_sum('action_time')
+            .over(['id','word_count'])
+            .alias('cum_sum_action_time_per_word')
+            )
+
+        logs = logs.group_by(['id','word_count']).agg(
+            pl.max('cum_sum_action_time_per_word')
+            .alias('time_per_word'))
+
+        word_timings = logs.group_by(['id']).agg(
+            word_timings_mean = pl.col('time_per_word').mean(),
+            word_timings_sum = pl.col('time_per_word').sum(),
+            word_timings_std = pl.col('time_per_word').std(),
+            word_timings_median = pl.col('time_per_word').median(),
+        )
+        feats.append(word_timings)
+    return feats[0], feats[1]
+
+def word_timings_adv(train_logs, test_logs):
+    print("< word timings advanced")    
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(
+            pl.cum_sum('action_time')
+            .over(['id','word_count'])
+            .alias('cum_sum_action_time_per_word')
+            )
+
+        logs = logs.group_by(['id','word_count']).agg(
+            pl.max('cum_sum_action_time_per_word')
+            .alias('time_per_word'))
+
+        word_timings = logs.group_by(['id']).agg(
+            words_timings_max = pl.col('time_per_word').max(),
+            words_timings_q1 = pl.col('time_per_word').quantile(0.25),
+            words_timings_q3 = pl.col('time_per_word').quantile(0.75),
+            words_timings_kurt = pl.col('time_per_word').kurtosis(),
+            words_timings_skew = pl.col('time_per_word').skew(),
+        )
+        feats.append(word_timings)
     return feats[0], feats[1]
 
         # everything is logged
