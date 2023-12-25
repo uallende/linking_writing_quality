@@ -131,7 +131,7 @@ def countvectorize_one_three(train_essays, test_essays):
     ts_feats = pl.DataFrame(ts_feats).lazy()
     return tr_feats, ts_feats
 
-def countvectorize_one_three(train_essays, test_essays):
+def countvectorize_one_four(train_essays, test_essays):
     print("< Count vectorize one-grams >")
     
     tr_len = train_essays.shape[0]
@@ -151,7 +151,67 @@ def countvectorize_one_three(train_essays, test_essays):
     ts_feats = pl.DataFrame(ts_feats).lazy()
     return tr_feats, ts_feats
 
-def down_events_counts_one(train_logs, test_logs, n_events=20):
+def countvectorize_two_one(train_essays, test_essays):
+    print("< Count vectorize bi-grams >")
+    data = []
+    tr_len = train_essays.shape[0]
+    ids = pd.concat([train_essays.id, test_essays.id], axis=0).reset_index(drop=True)
+    essays = pd.concat([train_essays, test_essays], axis=0).reset_index(drop=True)
+    c_vect = CountVectorizer(ngram_range=(2, 2))
+    toks = c_vect.fit_transform(essays['essay']).todense()
+    toks = toks[:,:4]
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+
+    feats = pd.concat([ids, toks_df], axis=1)
+
+    tr_feats = feats.loc[:tr_len-1]
+    ts_feats = feats.loc[tr_len:]
+
+    tr_feats = pl.DataFrame(tr_feats).lazy()
+    ts_feats = pl.DataFrame(ts_feats).lazy()
+    return tr_feats, ts_feats
+
+def countvectorize_two_one(train_essays, test_essays):
+    print("< Count vectorize bi-grams >")
+    data = []
+    tr_len = train_essays.shape[0]
+    ids = pd.concat([train_essays.id, test_essays.id], axis=0).reset_index(drop=True)
+    essays = pd.concat([train_essays, test_essays], axis=0).reset_index(drop=True)
+    c_vect = CountVectorizer(ngram_range=(2, 2))
+    toks = c_vect.fit_transform(essays['essay']).todense()
+    toks = toks[:,5:8]
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+
+    feats = pd.concat([ids, toks_df], axis=1)
+
+    tr_feats = feats.loc[:tr_len-1]
+    ts_feats = feats.loc[tr_len:]
+
+    tr_feats = pl.DataFrame(tr_feats).lazy()
+    ts_feats = pl.DataFrame(ts_feats).lazy()
+    return tr_feats, ts_feats
+
+def countvectorize_two_two(train_essays, test_essays):
+    print("< Count vectorize bi-grams >")
+    data = []
+    tr_len = train_essays.shape[0]
+    ids = pd.concat([train_essays.id, test_essays.id], axis=0).reset_index(drop=True)
+    essays = pd.concat([train_essays, test_essays], axis=0).reset_index(drop=True)
+    c_vect = CountVectorizer(ngram_range=(2, 2))
+    toks = c_vect.fit_transform(essays['essay']).todense()
+    toks = toks[:,9:12]
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+
+    feats = pd.concat([ids, toks_df], axis=1)
+
+    tr_feats = feats.loc[:tr_len-1]
+    ts_feats = feats.loc[tr_len:]
+
+    tr_feats = pl.DataFrame(tr_feats).lazy()
+    ts_feats = pl.DataFrame(ts_feats).lazy()
+    return tr_feats, ts_feats
+
+def down_events_counts_three(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
     logs = pl.concat([train_logs, test_logs], how = 'vertical')
     events = (logs
@@ -301,7 +361,6 @@ def create_pauses(train_logs, test_logs):
         feats.append(temp)
     return feats[0], feats[1]
 
-
 def essay_sents_per_par_basic(df):
     AGGREGATIONS = ['count', 'mean', 'std', 'median']
     df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
@@ -422,6 +481,416 @@ def cursor_pos_acceleration_adv(train_logs, test_logs, time_agg=8):
         feats.append(stats)
     return feats[0], feats[1]
 
+def p_burst_feats_basic(train_logs, test_logs, time_agg=2):
+    print("< P-burst features >")    
+    feats=[]
+    original_test_ids = test_logs.select('id').unique()  
+    for logs in [train_logs, test_logs]:
+        df=logs.clone()
+
+        temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
+        temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
+        # temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        temp = temp.filter(pl.col('activity').is_in(['Input']))
+
+        temp = temp.with_columns(pl.col('time_diff')< time_agg)
+
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('time_diff','id').
+            rle_id()).filter(pl.col('time_diff'))
+
+        p_burst = rle_grp.group_by(['id','id_runs']).count()
+
+        p_burst = p_burst.group_by(['id']).agg(
+            p_burst_count = pl.col('count').count(),
+            p_burst_mean = pl.col('count').mean(),
+            p_burst_sum = pl.col('count').sum(),
+            p_burst_std = pl.col('count').std(),
+            p_burst_median = pl.col('count').median(),
+        )
+        feats.append(p_burst)
+
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
+    return feats[0], feats[1]
+
+def p_burst_feats_adv(train_logs, test_logs, time_agg=2):
+    print("< P-burst features >")    
+    feats=[]
+    original_test_ids = test_logs.select('id').unique()  
+    for logs in [train_logs, test_logs]:
+        df=logs.clone()
+
+        temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
+        temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
+        # temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        temp = temp.filter(pl.col('activity').is_in(['Input']))
+
+        temp = temp.with_columns(pl.col('time_diff')< time_agg)
+
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('time_diff','id').
+            rle_id()).filter(pl.col('time_diff'))
+
+        p_burst = rle_grp.group_by(['id','id_runs']).count()
+
+        p_burst = p_burst.group_by(['id']).agg(
+            p_burst_max = pl.col('count').max(),
+            p_burst_min = pl.col('count').min(),
+            burst_skew = pl.col('count').skew(),
+            burst_kurt = pl.col('count').kurtosis(),
+            burst_q1 = pl.col('count').quantile(0.25),
+            burst_q3 = pl.col('count').quantile(0.75),
+
+        )
+        feats.append(p_burst)
+
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
+    return feats[0], feats[1]
+
+def r_burst_feats_basic(train_logs, test_logs):
+    print("< R-burst features >")    
+    feats = []
+    original_test_ids = test_logs.select('id').unique()  
+
+    for logs in [train_logs, test_logs]:
+        df = logs.clone()
+        temp = df.with_columns(pl.col('activity').is_in(['Remove/Cut']))
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('activity', 'id').rle_id()
+        ).filter(pl.col('activity'))
+
+        r_burst = rle_grp.group_by(['id', 'id_runs']).count()
+        r_burst = r_burst.group_by(['id']).agg(
+            r_burst_count = pl.col('count').count(),
+            r_burst_mean = pl.col('count').mean(),
+            r_burst_sum = pl.col('count').sum(),
+            r_burst_std = pl.col('count').std(),
+            r_burst_median = pl.col('count').median(),
+        )
+        feats.append(r_burst)
+
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
+    return feats[0], feats[1]
+
+def r_burst_feats_adv(train_logs, test_logs):
+    print("< R-burst features >")    
+    feats = []
+    original_test_ids = test_logs.select('id').unique()  
+
+    for logs in [train_logs, test_logs]:
+        df = logs.clone()
+        temp = df.with_columns(pl.col('activity').is_in(['Remove/Cut']))
+        rle_grp = temp.with_columns(
+            id_runs = pl.struct('activity', 'id').rle_id()
+        ).filter(pl.col('activity'))
+
+        r_burst = rle_grp.group_by(['id', 'id_runs']).count()
+        r_burst = r_burst.group_by(['id']).agg(
+            r_burst_max = pl.col('count').max(),
+            r_burst_min = pl.col('count').min(),
+            r_burst_skew = pl.col('count').skew(),
+            r_burst_kurt = pl.col('count').kurtosis(),
+            r_burst_q1 = pl.col('count').quantile(0.25),
+            r_burst_q3 = pl.col('count').quantile(0.75),
+        )
+        feats.append(r_burst)
+
+    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
+    if feats[1].collect().height == 0:
+        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
+        feats[1] = zero_filled_df
+
+    [feat.collect() for feat in feats]
+    missing_cols = set(feats[0].columns) - set(feats[1].columns)
+            
+    for col in missing_cols:
+        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
+        feats[1] = feats[1].with_columns(zero_series)
+
+    return feats[0], feats[1]
+
+def events_counts_acceleration_basic(train_logs, test_logs, time_agg=4):
+    print("< events counts acceleration >")    
+
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for logs in [tr_pad, ts_pad]:
+
+        grp_df = logs.clone()
+        grp_df = grp_df.sort(['id', 'time_bin'])
+
+        grp_df = grp_df.with_columns([
+            pl.col('event_id').diff().over('id').fill_null(0).alias('event_id_diff'),
+            pl.col('time_bin').diff().over('id').fill_null(0).alias('time_bin_diff'),
+        ])
+
+        grp_df = grp_df.with_columns(
+            (pl.col('event_id_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')
+        )
+
+        grp_df = grp_df.with_columns(
+            pl.col('rate_of_change').diff().over('id').fill_nan(0).alias('rate_of_change_diff')
+        )
+
+        grp_df = grp_df.with_columns(
+            (pl.col('rate_of_change_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('acceleration')
+        )
+        grp_df = grp_df.select(pl.col(['id', 'acceleration']))
+
+        stats = grp_df.group_by('id').agg(
+            evid_acc_zero = pl.col('acceleration').filter(pl.col('acceleration') == 0).count(),
+            evid_acc_pst = pl.col('acceleration').filter(pl.col('acceleration') > 0).count(),
+            evid_acc_neg = pl.col('acceleration').filter(pl.col('acceleration') < 0).count(),
+            evid_acc_sum = pl.col('acceleration').sum(),
+            evid_acc_mean = pl.col('acceleration').mean(),
+            evid_acc_std = pl.col('acceleration').std(),
+            evid_acc_median = pl.col('acceleration').median(),
+        )
+
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def events_counts_acceleration_adv(train_logs, test_logs, time_agg=4):
+    print("< events counts acceleration >")    
+
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for logs in [tr_pad, ts_pad]:
+
+        grp_df = logs.clone()
+        grp_df = grp_df.sort(['id', 'time_bin'])
+
+        grp_df = grp_df.with_columns([
+            pl.col('event_id').diff().over('id').fill_null(0).alias('event_id_diff'),
+            pl.col('time_bin').diff().over('id').fill_null(0).alias('time_bin_diff'),
+        ])
+
+        grp_df = grp_df.with_columns(
+            (pl.col('event_id_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')
+        )
+
+        grp_df = grp_df.with_columns(
+            pl.col('rate_of_change').diff().over('id').fill_nan(0).alias('rate_of_change_diff')
+        )
+
+        grp_df = grp_df.with_columns(
+            (pl.col('rate_of_change_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('acceleration')
+        )
+        grp_df = grp_df.select(pl.col(['id', 'acceleration']))
+
+        stats = grp_df.group_by('id').agg(
+            evid_acc_max = pl.col('acceleration').max(),
+            evid_acc_q1 = pl.col('acceleration').quantile(0.25),
+            evid_acc_q3 = pl.col('acceleration').quantile(0.75),
+            evid_acc_kurt = pl.col('acceleration').kurtosis(),
+            evid_acc_skew = pl.col('acceleration').skew(),
+        )
+
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def word_count_acceleration_basic(train_logs, test_logs, time_agg=8):
+    print("< word count acceleration >")    
+
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for logs in [tr_pad, ts_pad]:
+
+        grp_df = logs.clone()
+        grp_df = grp_df.sort(['id', 'time_bin'])
+
+        grp_df = grp_df.with_columns([
+            pl.col('word_count').diff().over('id').fill_null(0).alias('word_count_diff'),
+            pl.col('time_bin').diff().over('id').fill_null(0).alias('time_bin_diff'),
+        ])
+
+        grp_df = grp_df.with_columns(
+            (pl.col('word_count_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')
+        )
+
+        grp_df = grp_df.with_columns(
+            pl.col('rate_of_change').diff().over('id').fill_nan(0).alias('rate_of_change_diff')
+        )
+
+        grp_df = grp_df.with_columns(
+            (pl.col('rate_of_change_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('acceleration')
+        )
+        grp_df = grp_df.select(pl.col(['id', 'acceleration']))
+
+        stats = grp_df.group_by('id').agg(
+            word_count_acc_zero = pl.col('acceleration').filter(pl.col('acceleration') == 0).count(),
+            word_count_acc_pst = pl.col('acceleration').filter(pl.col('acceleration') > 0).count(),
+            word_count_acc_neg = pl.col('acceleration').filter(pl.col('acceleration') < 0).count(),
+            word_count_acc_sum = pl.col('acceleration').sum(),
+            word_count_acc_mean = pl.col('acceleration').mean(),
+            word_count_acc_median = pl.col('acceleration').median(),
+            word_count_acc_std = pl.col('acceleration').std(),
+        )
+
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def word_count_acceleration_adv(train_logs, test_logs, time_agg=8):
+    print("< word count acceleration >")    
+
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    tr_pad, ts_pad = down_time_padding(tr_logs, ts_logs, time_agg)
+
+    for logs in [tr_pad, ts_pad]:
+
+        grp_df = logs.clone()
+        grp_df = grp_df.sort(['id', 'time_bin'])
+
+        grp_df = grp_df.with_columns([
+            pl.col('word_count').diff().over('id').fill_null(0).alias('word_count_diff'),
+            pl.col('time_bin').diff().over('id').fill_null(0).alias('time_bin_diff'),
+        ])
+
+        grp_df = grp_df.with_columns(
+            (pl.col('word_count_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('rate_of_change')
+        )
+
+        grp_df = grp_df.with_columns(
+            pl.col('rate_of_change').diff().over('id').fill_nan(0).alias('rate_of_change_diff')
+        )
+
+        grp_df = grp_df.with_columns(
+            (pl.col('rate_of_change_diff') / pl.col('time_bin_diff')).fill_nan(0).alias('acceleration')
+        )
+        grp_df = grp_df.select(pl.col(['id', 'acceleration']))
+
+        stats = grp_df.group_by('id').agg(
+            word_count_acc_max = pl.col('acceleration').max(),
+            word_count_acc_q1 = pl.col('acceleration').quantile(0.25),
+            word_count_acc_q3 = pl.col('acceleration').quantile(0.75),
+            word_count_acc_kurt = pl.col('acceleration').kurtosis(),
+            word_count_acc_skew = pl.col('acceleration').skew(),
+        )
+
+        feats.append(stats)
+    return feats[0], feats[1]
+
+def essay_sent_words(df):
+    AGGREGATIONS = ['count', 'mean', 'max', 'first', q1, 'median', q3, 'sum']
+    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent')
+    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
+    df['sent_word_count'] = df['sent'].apply(lambda x: len(x.split(' ')))
+
+    sent_agg_df = df[['id','sent_word_count']].groupby(['id']).agg(AGGREGATIONS)
+    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
+    sent_agg_df['id'] = sent_agg_df.index
+    sent_agg_df = sent_agg_df.reset_index(drop=True)
+    sent_agg_df.drop(columns=["sent_word_count_count"], inplace=True)
+    return sent_agg_df
+
+def essay_sent_length(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+
+    print("< Essays sentences feats >")    
+    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent')
+    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
+    df['sent_len'] = df['sent'].apply(lambda x: len(x))
+    df = df[df.sent_len!=0].reset_index(drop=True)
+
+    sent_agg_df = df[['id','sent_len']].groupby(['id']).agg(AGGREGATIONS)
+    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
+    sent_agg_df['id'] = sent_agg_df.index
+    sent_agg_df = sent_agg_df.reset_index(drop=True)
+    sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
+    return sent_agg_df
+
+def essay_par_length(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+
+    print("< Essays paragraphs feats >")    
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['paragraph_len'] = df['paragraph'].apply(lambda x: len(x)) 
+    df = df[df.paragraph_len!=0].reset_index(drop=True)
+    
+    paragraph_agg_df = df[['id','paragraph_len']].groupby(['id']).agg(AGGREGATIONS)
+                                 
+    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
+    paragraph_agg_df['id'] = paragraph_agg_df.index
+    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
+    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+    return paragraph_agg_df
+
+def essay_par_words(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+    print("< Essays paragraphs feats >")    
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['paragraph_word_count'] = df['paragraph'].apply(lambda x: len(x.split(' ')))
+    
+    paragraph_agg_df = df[['id','paragraph_word_count']].groupby(['id']).agg(AGGREGATIONS)
+    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
+    paragraph_agg_df['id'] = paragraph_agg_df.index
+    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
+    paragraph_agg_df.drop(columns=["paragraph_word_count_count"], inplace=True)
+    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+    return paragraph_agg_df
+
+def essay_sents_per_par(df):
+    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3]
+    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
+    df = df.explode('paragraph')
+    df['sent_per_par'] = df['paragraph'].apply(lambda x: re.split('\\.|\\?|\\!',x))
+    df = df.explode('sent_per_par')
+    df['sent_per_par'] = df['sent_per_par'].apply(lambda x: x.replace('\n','').strip())
+    df = df.groupby(['id','paragraph'])['sent_per_par'].count().reset_index()
+    df = df[df['paragraph'].str.strip() != ''].drop('paragraph', axis=1)
+
+    par_sent_df = df[['id','sent_per_par']].groupby(['id']).agg(AGGREGATIONS)
+    par_sent_df.columns = ['_'.join(x) for x in par_sent_df.columns]
+    par_sent_df['id'] = par_sent_df.index
+    par_sent_df = par_sent_df.reset_index(drop=True)
+    par_sent_df = par_sent_df.rename(columns={"paragraph_len_count":"paragraph_count"})
+
+    return par_sent_df
+
 def add_word_pauses_basic(train_logs, test_logs):
     print("< added words pauses basic")    
     feats = []
@@ -453,6 +922,7 @@ def add_word_pauses_basic(train_logs, test_logs):
         )
         feats.append(word_pause)
     return feats[0], feats[1]
+
 
 def add_word_pauses_adv(train_logs, test_logs):
     print("< added words pauses advanced")    
@@ -486,22 +956,140 @@ def add_word_pauses_adv(train_logs, test_logs):
         feats.append(word_pause)
     return feats[0], feats[1]
 
-def essay_par_length(df):
-    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
+def remove_word_pauses_basic(train_logs, test_logs):
+    print("< removed words pauses basic")    
+    feats = []
 
-    print("< Essays paragraphs feats >")    
-    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
-    df = df.explode('paragraph')
-    df['paragraph_len'] = df['paragraph'].apply(lambda x: len(x)) 
-    df = df[df.paragraph_len!=0].reset_index(drop=True)
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
+        logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(pl.col('word_count')
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
+
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
+
+        word_pause = logs.filter(pl.col('word_diff')<0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_count = pl.col('down_time_diff').count(),
+                rmv_words_pause_mean = pl.col('down_time_diff').mean(),
+                rmv_words_pause_sum = pl.col('down_time_diff').sum(),
+                rmv_words_pause_std = pl.col('down_time_diff').std(),
+                rmv_words_pause_median = pl.col('down_time_diff').median(),
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
+
+
+def remove_word_pauses_adv(train_logs, test_logs):
+    print("< removed words pauses advanced")    
+    feats = []
+
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
+        logs = data.clone()
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(pl.col('word_count')
+                    .diff()
+                    .over('id')
+                    .fill_null(1)
+                    .alias('word_diff'))
+
+        logs = logs.with_columns(pl.col('down_time')
+                    .diff()
+                    .over('id')
+                    .fill_null(0)
+                    .alias('down_time_diff')) 
+
+        word_pause = logs.filter(pl.col('word_diff')<0)
+        word_pause = word_pause.group_by(['id']).agg(
+                rmv_words_pause_max = pl.col('down_time_diff').max(),
+                rmv_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
+                rmv_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
+                rmv_words_pause_kurt = pl.col('down_time_diff').kurtosis(),
+                rmv_words_pause_skew = pl.col('down_time_diff').skew(),
+        )
+        feats.append(word_pause)
+    return feats[0], feats[1]
+
+def word_timings_basic(train_logs, test_logs):
+    print("< word timings advanced")    
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(
+            pl.cum_sum('action_time')
+            .over(['id','word_count'])
+            .alias('cum_sum_action_time_per_word')
+            )
+
+        logs = logs.group_by(['id','word_count']).agg(
+            pl.max('cum_sum_action_time_per_word')
+            .alias('time_per_word'))
+
+        word_timings = logs.group_by(['id']).agg(
+            word_timings_mean = pl.col('time_per_word').mean(),
+            word_timings_sum = pl.col('time_per_word').sum(),
+            word_timings_std = pl.col('time_per_word').std(),
+            word_timings_median = pl.col('time_per_word').median(),
+        )
+        feats.append(word_timings)
+    return feats[0], feats[1]
+
+def word_timings_adv(train_logs, test_logs):
+    print("< word timings advanced")    
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
+        logs = logs.with_columns(
+            pl.cum_sum('action_time')
+            .over(['id','word_count'])
+            .alias('cum_sum_action_time_per_word')
+            )
+
+        logs = logs.group_by(['id','word_count']).agg(
+            pl.max('cum_sum_action_time_per_word')
+            .alias('time_per_word'))
+
+        word_timings = logs.group_by(['id']).agg(
+            words_timings_max = pl.col('time_per_word').max(),
+            words_timings_q1 = pl.col('time_per_word').quantile(0.25),
+            words_timings_q3 = pl.col('time_per_word').quantile(0.75),
+            words_timings_kurt = pl.col('time_per_word').kurtosis(),
+            words_timings_skew = pl.col('time_per_word').skew(),
+        )
+        feats.append(word_timings)
+    return feats[0], feats[1]
+
+def categorical_nunique(train_logs, test_logs):
+    print("< Categorical # unique values features >")    
+    feats = []
+
+    for logs in [train_logs, test_logs]:
+        data = logs.clone()
+        temp  = data.group_by("id").agg(
+            pl.n_unique(['activity', 'down_event', 'text_change'])
+            .name.suffix('_nunique'))
+        feats.append(temp)
     
-    paragraph_agg_df = df[['id','paragraph_len']].groupby(['id']).agg(AGGREGATIONS)
-                                 
-    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
-    paragraph_agg_df['id'] = paragraph_agg_df.index
-    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
-    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
-    return paragraph_agg_df
+    return feats[0], feats[1]
 
 added_feats_list = ['train_down_events_counts.pkl', 'train_vector_one_gram.pkl', 
                     'train_create_pauses.pkl', 'train_sentences_per_paragraph.pkl', 
