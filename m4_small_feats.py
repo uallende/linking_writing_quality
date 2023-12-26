@@ -80,7 +80,7 @@ def countvectorize_one_one(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(1, 1))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,:8]
-    toks_df = pd.DataFrame(columns = [f'one_gram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'one_gram_tok_one{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -100,7 +100,7 @@ def countvectorize_one_two(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(1, 1))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,9:16]
-    toks_df = pd.DataFrame(columns = [f'one_gram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'one_gram_tok_two{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -120,7 +120,7 @@ def countvectorize_one_three(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(1, 1))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,17:24]
-    toks_df = pd.DataFrame(columns = [f'one_gram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'one_gram_tok_three{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -140,7 +140,7 @@ def countvectorize_one_four(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(1, 1))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,25:]
-    toks_df = pd.DataFrame(columns = [f'one_gram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'one_gram_tok_four{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -160,7 +160,7 @@ def countvectorize_two_one(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(2, 2))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,:4]
-    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_one{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -180,7 +180,7 @@ def countvectorize_two_one(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(2, 2))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,5:8]
-    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_two{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -200,7 +200,7 @@ def countvectorize_two_two(train_essays, test_essays):
     c_vect = CountVectorizer(ngram_range=(2, 2))
     toks = c_vect.fit_transform(essays['essay']).todense()
     toks = toks[:,9:12]
-    toks_df = pd.DataFrame(columns = [f'bigram_tok_{i}' for i in range(toks.shape[1])], data=toks)
+    toks_df = pd.DataFrame(columns = [f'bigram_tok_three{i}' for i in range(toks.shape[1])], data=toks)
 
     feats = pd.concat([ids, toks_df], axis=1)
 
@@ -211,14 +211,14 @@ def countvectorize_two_two(train_essays, test_essays):
     ts_feats = pl.DataFrame(ts_feats).lazy()
     return tr_feats, ts_feats
 
-def down_events_counts_three(train_logs, test_logs, n_events=20):
+def down_events_counts_one(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
     logs = pl.concat([train_logs, test_logs], how = 'vertical')
     events = (logs
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .slice(offset=0, length=20).collect()
+            .slice(offset=0, length=10).collect()
             .select('down_event')
             .to_series().to_list())
 
@@ -236,7 +236,7 @@ def down_events_counts_three(train_logs, test_logs, n_events=20):
     # Rename columns to a generic format
     cols = event_stats.columns[1:]  # Skip the 'id' column
     for i, col in enumerate(cols):
-        event_stats = event_stats.rename({col: f'down_event_{i+1}'})
+        event_stats = event_stats.rename({col: f'down_event_one_{i+1}'})
 
     tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
@@ -250,7 +250,7 @@ def down_events_counts_two(train_logs, test_logs, n_events=20):
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .slice(offset=20, length=20).collect()
+            .slice(offset=10, length=10).collect()
             .select('down_event')
             .to_series().to_list())
 
@@ -268,7 +268,7 @@ def down_events_counts_two(train_logs, test_logs, n_events=20):
     # Rename columns to a generic format
     cols = event_stats.columns[1:]  # Skip the 'id' column
     for i, col in enumerate(cols):
-        event_stats = event_stats.rename({col: f'down_event_{i+1}'})
+        event_stats = event_stats.rename({col: f'down_event_two_{i+1}'})
 
     tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
@@ -282,7 +282,7 @@ def down_events_counts_three(train_logs, test_logs, n_events=20):
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .slice(offset=40, length=20).collect()
+            .slice(offset=20, length=10).collect()
             .select('down_event')
             .to_series().to_list())
 
@@ -300,21 +300,21 @@ def down_events_counts_three(train_logs, test_logs, n_events=20):
     # Rename columns to a generic format
     cols = event_stats.columns[1:]  # Skip the 'id' column
     for i, col in enumerate(cols):
-        event_stats = event_stats.rename({col: f'down_event_{i+1}'})
+        event_stats = event_stats.rename({col: f'down_event_three_{i+1}'})
 
     tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
 
     return tr_feats, ts_feats
 
-def down_events_counts_one(train_logs, test_logs, n_events=20):
+def down_events_counts_four(train_logs, test_logs, n_events=20):
     print("< Events counts features >")
     logs = pl.concat([train_logs, test_logs], how = 'vertical')
     events = (logs
             .group_by(['down_event'])
             .agg(pl.count())
             .sort('count', descending=True)
-            .slice(offset=60, length=20).collect()
+            .slice(offset=30, length=10).collect()
             .select('down_event')
             .to_series().to_list())
 
@@ -332,7 +332,7 @@ def down_events_counts_one(train_logs, test_logs, n_events=20):
     # Rename columns to a generic format
     cols = event_stats.columns[1:]  # Skip the 'id' column
     for i, col in enumerate(cols):
-        event_stats = event_stats.rename({col: f'down_event_{i+1}'})
+        event_stats = event_stats.rename({col: f'down_event_four_{i+1}'})
 
     tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
@@ -1090,6 +1090,85 @@ def categorical_nunique(train_logs, test_logs):
         feats.append(temp)
     
     return feats[0], feats[1]
+
+def sent_pauses(train_logs, test_logs):
+    print("< sentences pauses >")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.select(
+            pl.col(['id','event_id','down_event','action_time'])).sort(['id','event_id'])
+            
+        logs = logs.with_columns(pl.col('down_event').is_in(['.','?','!']))
+
+        sents = logs.with_columns(
+            id_runs = pl.cum_sum('down_event').over('id').shift(1).fill_null(0)
+        )
+
+        sents = sents.with_columns(
+            pl.cum_sum('action_time')
+            .over('id','id_runs')
+            .alias('sent_cum_sum'))
+
+        sents = sents.group_by('id','id_runs').agg(pl.col('sent_cum_sum').max()).sort('id','id_runs')    
+
+        sent_pauses = sents.group_by(['id']).agg(
+                        sen_pause_mean = pl.col('sent_cum_sum').mean(),
+                        sen_pause_sum = pl.col('sent_cum_sum').sum(),
+                        sen_pause_std = pl.col('sent_cum_sum').std(),
+                        sen_pause_max = pl.col('sent_cum_sum').max(),
+                        sen_pause_min = pl.col('sent_cum_sum').min(),
+                        sen_pause_median = pl.col('sent_cum_sum').median(),
+                        sen_pasuse_q1 = pl.col('sent_cum_sum').quantile(0.25),
+                        sen_pasuse_q3 = pl.col('sent_cum_sum').quantile(0.75),
+                        sen_pasuse_kurt = pl.col('sent_cum_sum').kurtosis(),
+                        sen_pasuse_skew = pl.col('sent_cum_sum').skew(),
+        )
+        feats.append(sent_pauses)
+    return feats[0], feats[1]
+
+def par_pauses(train_logs, test_logs):
+    print("< paragraph pauses >")    
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = train_logs.clone()
+        logs = logs.select(
+            pl.col(['id','event_id','down_event','action_time'])).sort(['id','event_id'])
+            
+        logs = logs.with_columns(pl.col('down_event').is_in(['Enter']))
+
+        pars = logs.with_columns(
+            id_runs = pl.cum_sum('down_event').over('id').shift(1).fill_null(0)
+        )
+
+        pars = pars.with_columns(
+            pl.cum_sum('action_time')
+            .over('id','id_runs')
+            .alias('par_cum_sum'))
+
+        pars = pars.group_by('id','id_runs').agg(
+            pl.col('par_cum_sum')
+            .max()
+            .filter(pl.col('par_cum_sum')>10000)
+            .sort('id','id_runs'))  
+
+        pars_pauses = pars.group_by(['id']).agg(
+                        par_pause_mean = pl.col('par_cum_sum').mean(),
+                        par_pause_sum = pl.col('par_cum_sum').sum(),
+                        par_pause_std = pl.col('par_cum_sum').std(),
+                        par_pause_max = pl.col('par_cum_sum').max(),
+                        par_pause_min = pl.col('par_cum_sum').min(),
+                        par_pause_median = pl.col('par_cum_sum').median(),
+                        par_pasuse_q1 = pl.col('par_cum_sum').quantile(0.25),
+                        par_pasuse_q3 = pl.col('par_cum_sum').quantile(0.75),
+                        par_pasuse_kurt = pl.col('par_cum_sum').kurtosis(),
+                        par_pasuse_skew = pl.col('par_cum_sum').skew(),
+        )
+        feats.append(pars_pauses)
+    return feats[0], feats[1]
+
 
 added_feats_list = ['train_down_events_counts.pkl', 'train_vector_one_gram.pkl', 
                     'train_create_pauses.pkl', 'train_sentences_per_paragraph.pkl', 
