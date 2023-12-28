@@ -55,7 +55,6 @@ def down_time_padding(train_logs, test_logs, time_agg):
         # get max down_time value from logs
         max_logs = logs.clone()
         max_down_time = max_logs.group_by(['id']).agg(pl.max('down_time') / 1000)
-        # max_down_time = max_down_time.with_columns([pl.col('down_time').cast(pl.Int64)])
 
         padding_dataframes = []
         max_down_time = max_down_time.collect()
@@ -498,11 +497,11 @@ def action_time_baseline_stats(train_logs, test_logs):
             action_time_mean = pl.col('action_time').mean(),
             action_time_std = pl.col('action_time').std(),
             action_time_max = pl.col('action_time').max(),
-           # action_time_q1 = pl.col('action_time').quantile(0.25),
-           # action_time_median = pl.col('action_time').median(),
-           # action_time_q3 = pl.col('action_time').quantile(0.75),
-           # action_time_kurt = pl.col('action_time').kurtosis(),
-           # action_time_skew = pl.col('action_time').skew(),
+            action_time_q1 = pl.col('action_time').quantile(0.25),
+            action_time_median = pl.col('action_time').median(),
+            action_time_q3 = pl.col('action_time').quantile(0.75),
+            action_time_kurt = pl.col('action_time').kurtosis(),
+            action_time_skew = pl.col('action_time').skew(),
         )
         feats.append(stats)
     return feats[0], feats[1]
@@ -914,7 +913,7 @@ def parag_feats(df):
     return paragraph_agg_df
 
 def product_to_keys(logs, essays):
-
+    print('< product to keys >')
     feats = []
     for log, essay in zip(logs, essays):
         essay['product_len'] = essay.essay.str.len()
@@ -929,7 +928,7 @@ def product_to_keys(logs, essays):
     
 
 def get_keys_pressed_per_second(train_logs, test_logs):
-
+    print('< get keys pressed per second >')
     feats = []
     for data in [train_logs, test_logs]:
         logs = data.copy()
@@ -944,7 +943,6 @@ def get_keys_pressed_per_second(train_logs, test_logs):
     return tr_feats, ts_feats
 
 def create_pauses(train_logs, test_logs):
-
     print("< Idle time features >")
     feats = []
     for logs in [train_logs, test_logs]:
@@ -965,75 +963,15 @@ def create_pauses(train_logs, test_logs):
         feats.append(temp)
     return feats[0], feats[1]
 
-def essay_sent_words(df):
-    AGGREGATIONS = ['count', 'mean', 'max', 'first', q1, 'median', q3, 'sum']
-    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
-    df = df.explode('sent')
-    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
-    df['sent_word_count'] = df['sent'].apply(lambda x: len(x.split(' ')))
-
-    sent_agg_df = df[['id','sent_word_count']].groupby(['id']).agg(AGGREGATIONS)
-    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
-    sent_agg_df['id'] = sent_agg_df.index
-    sent_agg_df = sent_agg_df.reset_index(drop=True)
-    sent_agg_df.drop(columns=["sent_word_count_count"], inplace=True)
-    return sent_agg_df
-
-def essay_sent_length(df):
-    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
-
-    print("< Essays sentences feats >")    
-    df['sent'] = df['essay'].apply(lambda x: re.split('\\.|\\?|\\!',x))
-    df = df.explode('sent')
-    df['sent'] = df['sent'].apply(lambda x: x.replace('\n','').strip())
-    df['sent_len'] = df['sent'].apply(lambda x: len(x))
-    df = df[df.sent_len!=0].reset_index(drop=True)
-
-    sent_agg_df = df[['id','sent_len']].groupby(['id']).agg(AGGREGATIONS)
-    sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
-    sent_agg_df['id'] = sent_agg_df.index
-    sent_agg_df = sent_agg_df.reset_index(drop=True)
-    sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
-    return sent_agg_df
-
-def essay_par_length(df):
-    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
-
-    print("< Essays paragraphs feats >")    
-    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
-    df = df.explode('paragraph')
-    df['paragraph_len'] = df['paragraph'].apply(lambda x: len(x)) 
-    df = df[df.paragraph_len!=0].reset_index(drop=True)
-    
-    paragraph_agg_df = df[['id','paragraph_len']].groupby(['id']).agg(AGGREGATIONS)
-                                 
-    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
-    paragraph_agg_df['id'] = paragraph_agg_df.index
-    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
-    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
-    return paragraph_agg_df
-
-def essay_par_words(df):
-    AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3, 'sum']
-    print("< Essays paragraphs feats >")    
-    df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
-    df = df.explode('paragraph')
-    df['paragraph_word_count'] = df['paragraph'].apply(lambda x: len(x.split(' ')))
-    
-    paragraph_agg_df = df[['id','paragraph_word_count']].groupby(['id']).agg(AGGREGATIONS)
-    paragraph_agg_df.columns = ['_'.join(x) for x in paragraph_agg_df.columns]
-    paragraph_agg_df['id'] = paragraph_agg_df.index
-    paragraph_agg_df = paragraph_agg_df.reset_index(drop=True)
-    paragraph_agg_df.drop(columns=["paragraph_word_count_count"], inplace=True)
-    paragraph_agg_df = paragraph_agg_df.rename(columns={"paragraph_len_count":"paragraph_count"})
-    return paragraph_agg_df
-
 def essay_sents_per_par(df):
     AGGREGATIONS = ['count', 'mean', 'min', 'max', 'first', 'last', q1, 'median', q3]
     df['paragraph'] = df['essay'].apply(lambda x: x.split('\n'))
     df = df.explode('paragraph')
+    df = df[df['paragraph'].str.strip() != '']
     df['sent_per_par'] = df['paragraph'].apply(lambda x: re.split('\\.|\\?|\\!',x))
     df = df.explode('sent_per_par')
+    df = df[df['sent_per_par'].str.strip() != '']
+    print(len(df))
     df['sent_per_par'] = df['sent_per_par'].apply(lambda x: x.replace('\n','').strip())
     df = df.groupby(['id','paragraph'])['sent_per_par'].count().reset_index()
     df = df[df['paragraph'].str.strip() != ''].drop('paragraph', axis=1)
@@ -1043,7 +981,6 @@ def essay_sents_per_par(df):
     par_sent_df['id'] = par_sent_df.index
     par_sent_df = par_sent_df.reset_index(drop=True)
     par_sent_df = par_sent_df.rename(columns={"paragraph_len_count":"paragraph_count"})
-
     return par_sent_df
 
 def add_word_pauses(train_logs, test_logs):
@@ -1083,7 +1020,7 @@ def add_word_pauses(train_logs, test_logs):
         feats.append(word_pause)
     return feats[0], feats[1]
 
-def remove_word_pauses_basic(train_logs, test_logs):
+def remove_word_pauses(train_logs, test_logs):
     print("< removed words pauses basic")    
     feats = []
 
@@ -1111,34 +1048,6 @@ def remove_word_pauses_basic(train_logs, test_logs):
                 rmv_words_pause_sum = pl.col('down_time_diff').sum(),
                 rmv_words_pause_std = pl.col('down_time_diff').std(),
                 rmv_words_pause_median = pl.col('down_time_diff').median(),
-        )
-        feats.append(word_pause)
-    return feats[0], feats[1]
-
-
-def remove_word_pauses_adv(train_logs, test_logs):
-    print("< removed words pauses advanced")    
-    feats = []
-
-    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
-
-    for data in [tr_logs, ts_logs]:
-        logs = data.clone()
-        logs = logs.select(pl.col(['id','event_id','word_count','down_time','up_time','action_time']))
-        logs = logs.with_columns(pl.col('word_count')
-                    .diff()
-                    .over('id')
-                    .fill_null(1)
-                    .alias('word_diff'))
-
-        logs = logs.with_columns(pl.col('down_time')
-                    .diff()
-                    .over('id')
-                    .fill_null(0)
-                    .alias('down_time_diff')) 
-
-        word_pause = logs.filter(pl.col('word_diff')<0)
-        word_pause = word_pause.group_by(['id']).agg(
                 rmv_words_pause_max = pl.col('down_time_diff').max(),
                 rmv_words_pause_q1 = pl.col('down_time_diff').quantile(0.25),
                 rmv_words_pause_q3 = pl.col('down_time_diff').quantile(0.75),
@@ -1146,43 +1055,6 @@ def remove_word_pauses_adv(train_logs, test_logs):
                 rmv_words_pause_skew = pl.col('down_time_diff').skew(),
         )
         feats.append(word_pause)
-    return feats[0], feats[1]
-
-def par_pauses(train_logs, test_logs):
-    print("< paragraph pauses >")    
-    feats = []
-
-    for data in [train_logs, test_logs]:
-        logs = data.clone()
-        logs = logs.select(
-            pl.col(['id','event_id','down_event','action_time'])).sort(['id','event_id'])
-            
-        logs = logs.with_columns(pl.col('down_event').is_in(['Enter']))
-
-        pars = logs.with_columns(
-            id_runs = pl.cum_sum('down_event').over('id').shift(1).fill_null(0)
-        )
-
-        pars = pars.with_columns(
-            pl.cum_sum('action_time')
-            .over('id','id_runs')
-            .alias('par_cum_sum'))
-      
-        pars = pars.group_by('id','id_runs').agg(pl.col('sent_cum_sum').max()).sort('id','id_runs')  
-
-        pars_pauses = pars.group_by(['id']).agg(
-                        par_pause_mean = pl.col('par_cum_sum').mean(),
-                        par_pause_sum = pl.col('par_cum_sum').sum(),
-                        par_pause_std = pl.col('par_cum_sum').std(),
-                        par_pause_max = pl.col('par_cum_sum').max(),
-                        par_pause_min = pl.col('par_cum_sum').min(),
-                        par_pause_median = pl.col('par_cum_sum').median(),
-                        par_pasuse_q1 = pl.col('par_cum_sum').quantile(0.25),
-                        par_pasuse_q3 = pl.col('par_cum_sum').quantile(0.75),
-                        par_pasuse_kurt = pl.col('par_cum_sum').kurtosis(),
-                        par_pasuse_skew = pl.col('par_cum_sum').skew(),
-        )
-        feats.append(pars_pauses)
     return feats[0], feats[1]
 
 def word_timings(train_logs, test_logs):
@@ -1216,74 +1088,4 @@ def word_timings(train_logs, test_logs):
             words_timings_skew = pl.col('time_per_word').skew(),
         )
         feats.append(word_timings)
-    return feats[0], feats[1]
-
-
-def sentences_timing(train_logs, test_logs):
-    print("< sentences timing >")    
-    feats = []
-    for data in [train_logs, test_logs]:
-        
-        logs = data.clone()
-        logs = logs.select(
-            pl.col(['id','event_id','down_event','action_time'])).sort('id','event_id')
-            
-        logs = logs.with_columns(
-            pl.when(pl.col('down_event')==".")
-            .then(0)
-            .when(pl.col('down_event')=="Backspace")
-            .then(-1)
-            .otherwise(1)
-            .alias('removed_sent_interm')
-        )
-
-        logs = logs.with_columns((pl.col('down_event') == '.').cum_sum().alias('sentence_number'))
-        logs = logs.with_columns(pl.col('down_event').is_in(['.','?','!']).alias('is_sent'))
-        logs = logs.with_columns(pl.col('removed_sent_interm').cum_sum().over('id','sentence_number'))
-
-        # FIND REMOVED "." WITH CONSECUTIVE BACKSPACES > removed_sent_interm will be neg
-        removed_stops = logs.group_by('id','sentence_number').agg(
-            (pl.col('removed_sent_interm') < 0)
-            .any()
-            .alias('has_negative')
-        )
-
-        logs = logs.join(removed_stops, on=('id', 'sentence_number'), how='left')
-
-        logs = logs.with_columns(
-            pl.when(pl.col('has_negative') & (pl.col('is_sent')))
-            .then(False)
-            .otherwise(pl.col('is_sent'))
-            .alias('is_sent')
-        )
-
-        logs = logs.drop('has_negative')
-
-        # RE-STABLISH SENTENCES STARTING POINT
-        logs = logs.with_columns((pl.col('is_sent')).cum_sum().alias('sentence_number'))
-
-        logs = logs.with_columns(pl.col('sentence_number').shift(1))
-        logs = logs.with_columns(
-                    sent_time = pl.cum_sum('action_time').over('id','sentence_number').fill_null(0)
-                )
-
-        sentences = logs.group_by('id','sentence_number').agg(
-            pl.max('sent_time')
-            .alias('total_sentence_time')
-        ).sort('id','sentence_number')
-
-        sentences = sentences.group_by(['id']).agg(
-                        sent_timings_mean = pl.col('total_sentence_time').mean(),
-                        sent_timings_sum = pl.col('total_sentence_time').sum(),
-                        sent_timings_std = pl.col('total_sentence_time').std(),
-                        sent_timings_max = pl.col('total_sentence_time').max(),
-                        sent_timings_min = pl.col('total_sentence_time').min(),
-                        sent_timings_median = pl.col('total_sentence_time').median(),
-                        sent_timingse_q1 = pl.col('total_sentence_time').quantile(0.25),
-                        sent_timingse_q3 = pl.col('total_sentence_time').quantile(0.75),
-                        sent_timingse_kurt = pl.col('total_sentence_time').kurtosis(),
-                        sent_timingse_skew = pl.col('total_sentence_time').skew(),
-        )
-        feats.append(sentences)
-
     return feats[0], feats[1]
