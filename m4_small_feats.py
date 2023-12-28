@@ -1078,6 +1078,74 @@ def word_timings_adv(train_logs, test_logs):
         feats.append(word_timings)
     return feats[0], feats[1]
 
+def sentences_timing(train_logs, test_logs):
+    print("< sentences timing >")    
+    feats = []
+    for data in [train_logs, test_logs]:
+        
+        logs = data.clone()
+        logs = logs.select(
+            pl.col(['id','event_id','down_event','action_time'])).sort('id','event_id')
+            
+        logs = logs.with_columns(
+            pl.when(pl.col('down_event')==".")
+            .then(0)
+            .when(pl.col('down_event')=="Backspace")
+            .then(-1)
+            .otherwise(1)
+            .alias('removed_sent_interm')
+        )
+
+        logs = logs.with_columns((pl.col('down_event') == '.').cum_sum().alias('sentence_number'))
+        logs = logs.with_columns(pl.col('down_event').is_in(['.','?','!']).alias('is_sent'))
+        logs = logs.with_columns(pl.col('removed_sent_interm').cum_sum().over('id','sentence_number'))
+
+        # FIND REMOVED "." WITH CONSECUTIVE BACKSPACES > removed_sent_interm will be neg
+        removed_stops = logs.groupby('id','sentence_number').agg(
+            (pl.col('removed_sent_interm') < 0)
+            .any()
+            .alias('has_negative')
+        )
+
+        logs = logs.join(removed_stops, on=('id', 'sentence_number'), how='left')
+
+        logs = logs.with_columns(
+            pl.when(pl.col('has_negative') & (pl.col('is_sent')))
+            .then(False)
+            .otherwise(pl.col('is_sent'))
+            .alias('is_sent')
+        )
+
+        logs = logs.drop('has_negative')
+        # RE-STABLISH SENTENCES STARTING POINT
+        logs = logs.with_columns((pl.col('is_sent')).cum_sum().alias('sentence_number'))
+
+        logs = logs.with_columns(pl.col('sentence_number').shift(1))
+        logs = logs.with_columns(
+                    sent_time = pl.cum_sum('action_time').over('id','sentence_number').fill_null(0)
+                )
+
+        sentences = logs.group_by('id','sentence_number').agg(
+            pl.max('sent_time')
+            .alias('total_sentence_time')
+        ).sort('id','sentence_number')
+
+        sentences = sentences.group_by(['id']).agg(
+                        sent_timings_mean = pl.col('total_sentence_time').mean(),
+                        sent_timings_sum = pl.col('total_sentence_time').sum(),
+                        sent_timings_std = pl.col('total_sentence_time').std(),
+                        sent_timings_max = pl.col('total_sentence_time').max(),
+                        sent_timings_min = pl.col('total_sentence_time').min(),
+                        sent_timings_median = pl.col('total_sentence_time').median(),
+                        sent_timingse_q1 = pl.col('total_sentence_time').quantile(0.25),
+                        sent_timingse_q3 = pl.col('total_sentence_time').quantile(0.75),
+                        sent_timingse_kurt = pl.col('total_sentence_time').kurtosis(),
+                        sent_timingse_skew = pl.col('total_sentence_time').skew(),
+        )
+        feats.append(sentences)
+
+    return feats[0], feats[1]
+
 def categorical_nunique(train_logs, test_logs):
     print("< Categorical # unique values features >")    
     feats = []
@@ -1090,85 +1158,6 @@ def categorical_nunique(train_logs, test_logs):
         feats.append(temp)
     
     return feats[0], feats[1]
-
-def sent_pauses(train_logs, test_logs):
-    print("< sentences pauses >")    
-    feats = []
-
-    for data in [train_logs, test_logs]:
-        logs = data.clone()
-        logs = logs.select(
-            pl.col(['id','event_id','down_event','action_time'])).sort(['id','event_id'])
-            
-        logs = logs.with_columns(pl.col('down_event').is_in(['.','?','!']))
-
-        sents = logs.with_columns(
-            id_runs = pl.cum_sum('down_event').over('id').shift(1).fill_null(0)
-        )
-
-        sents = sents.with_columns(
-            pl.cum_sum('action_time')
-            .over('id','id_runs')
-            .alias('sent_cum_sum'))
-
-        sents = sents.group_by('id','id_runs').agg(pl.col('sent_cum_sum').max()).sort('id','id_runs')    
-
-        sent_pauses = sents.group_by(['id']).agg(
-                        sen_pause_mean = pl.col('sent_cum_sum').mean(),
-                        sen_pause_sum = pl.col('sent_cum_sum').sum(),
-                        sen_pause_std = pl.col('sent_cum_sum').std(),
-                        sen_pause_max = pl.col('sent_cum_sum').max(),
-                        sen_pause_min = pl.col('sent_cum_sum').min(),
-                        sen_pause_median = pl.col('sent_cum_sum').median(),
-                        sen_pasuse_q1 = pl.col('sent_cum_sum').quantile(0.25),
-                        sen_pasuse_q3 = pl.col('sent_cum_sum').quantile(0.75),
-                        sen_pasuse_kurt = pl.col('sent_cum_sum').kurtosis(),
-                        sen_pasuse_skew = pl.col('sent_cum_sum').skew(),
-        )
-        feats.append(sent_pauses)
-    return feats[0], feats[1]
-
-def par_pauses(train_logs, test_logs):
-    print("< paragraph pauses >")    
-    feats = []
-
-    for data in [train_logs, test_logs]:
-        logs = train_logs.clone()
-        logs = logs.select(
-            pl.col(['id','event_id','down_event','action_time'])).sort(['id','event_id'])
-            
-        logs = logs.with_columns(pl.col('down_event').is_in(['Enter']))
-
-        pars = logs.with_columns(
-            id_runs = pl.cum_sum('down_event').over('id').shift(1).fill_null(0)
-        )
-
-        pars = pars.with_columns(
-            pl.cum_sum('action_time')
-            .over('id','id_runs')
-            .alias('par_cum_sum'))
-
-        pars = pars.group_by('id','id_runs').agg(
-            pl.col('par_cum_sum')
-            .max()
-            .filter(pl.col('par_cum_sum')>10000)
-            .sort('id','id_runs'))  
-
-        pars_pauses = pars.group_by(['id']).agg(
-                        par_pause_mean = pl.col('par_cum_sum').mean(),
-                        par_pause_sum = pl.col('par_cum_sum').sum(),
-                        par_pause_std = pl.col('par_cum_sum').std(),
-                        par_pause_max = pl.col('par_cum_sum').max(),
-                        par_pause_min = pl.col('par_cum_sum').min(),
-                        par_pause_median = pl.col('par_cum_sum').median(),
-                        par_pasuse_q1 = pl.col('par_cum_sum').quantile(0.25),
-                        par_pasuse_q3 = pl.col('par_cum_sum').quantile(0.75),
-                        par_pasuse_kurt = pl.col('par_cum_sum').kurtosis(),
-                        par_pasuse_skew = pl.col('par_cum_sum').skew(),
-        )
-        feats.append(pars_pauses)
-    return feats[0], feats[1]
-
 
 added_feats_list = ['train_down_events_counts.pkl', 'train_vector_one_gram.pkl', 
                     'train_create_pauses.pkl', 'train_sentences_per_paragraph.pkl', 
