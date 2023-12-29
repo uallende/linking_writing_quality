@@ -1000,7 +1000,7 @@ def add_word_pauses(train_logs, test_logs):
 
         logs = logs.with_columns(pl.col('down_time')
                     .diff()
-                    .over('id')
+                    .over('id','word_count')
                     .fill_null(0)
                     .alias('down_time_diff')) 
 
@@ -1088,4 +1088,30 @@ def word_timings(train_logs, test_logs):
             words_timings_skew = pl.col('time_per_word').skew(),
         )
         feats.append(word_timings)
+    return feats[0], feats[1]
+
+def word_wait_shift(train_logs, test_logs,shift):
+    print('< word_wait_shift >')
+    feats = []
+    for data in [train_logs,test_logs]:
+        logs = data.clone()
+        logs = logs.group_by('id','word_count').agg(
+            word_start_time = pl.col('down_time').min()).sort('id','word_count')
+
+        logs = logs.with_columns(pl.col('word_start_time').shift(shift).over('id').alias(f'shifted'))
+        logs = logs.with_columns((pl.col('word_start_time') - pl.col('shifted')).alias(f'word_time_diff_{shift}'))
+
+        words_shifted = logs.group_by('id').agg(
+                        pl.col(f'word_time_diff_{shift}').count().name.suffix('count'),
+                        pl.col(f'word_time_diff_{shift}').mean().name.suffix('mean'),
+                        pl.col(f'word_time_diff_{shift}').sum().name.suffix('sum'),
+                        pl.col(f'word_time_diff_{shift}').std().name.suffix('std'),
+                        pl.col(f'word_time_diff_{shift}').median().name.suffix('median'),
+                        pl.col(f'word_time_diff_{shift}').max().name.suffix('max'),
+                        pl.col(f'word_time_diff_{shift}').quantile(0.25).name.suffix('quantile_25'),
+                        pl.col(f'word_time_diff_{shift}').quantile(0.75).name.suffix('quantile_75'),
+                        pl.col(f'word_time_diff_{shift}').kurtosis().name.suffix('kurt'),
+                        pl.col(f'word_time_diff_{shift}').skew().name.suffix('skew'),
+        )
+        feats.append(words_shifted)
     return feats[0], feats[1]
