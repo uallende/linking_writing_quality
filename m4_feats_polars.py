@@ -1115,3 +1115,56 @@ def word_wait_shift(train_logs, test_logs,shift):
         )
         feats.append(words_shifted)
     return feats[0], feats[1]
+
+def text_changes_counts(train_logs, test_logs):
+    print("< text chaanges counts features >")
+    text_changes = ['\n', ':', 'NoChange', '/', ' ', ';', '\\', '=']
+    logs = pl.concat([train_logs, test_logs], how = 'vertical')
+
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+
+    data = logs.clone()
+    text_changes_stats = (data
+                    .filter(pl.col('text_change').is_in(text_changes))
+                    .group_by(['id', 'text_change'])
+                    .agg(pl.count()).collect()
+                    .pivot(values='count', index='id', columns='text_change')
+                    ).fill_null(0).lazy()
+
+    # Rename columns to a generic format
+    cols = text_changes_stats.columns[1:]  # Skip the 'id' column
+    for i, col in enumerate(cols):
+        text_changes_stats = text_changes_stats.rename({col: f'text_change{i+1}'})
+
+    tr_feats = text_changes_stats.filter(pl.col('id').is_in(tr_ids))
+    ts_feats = text_changes_stats.filter(pl.col('id').is_in(ts_ids))
+
+    return tr_feats, ts_feats
+
+
+def punctuations(train_logs, test_logs):
+    print("< punctuations features >")
+    logs = pl.concat([train_logs, test_logs], how = 'vertical')
+    punctuations = [':', '#', '%', '<', ')', '>', '+', '/', '(', '^', '_', ';', '@', '!', '$', '&', '*']
+
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+
+    data = logs.clone()
+    event_stats = (data
+                    .filter(pl.col('down_event').is_in(punctuations))
+                    .group_by(['id', 'down_event'])
+                    .agg(pl.count()).collect()
+                    .pivot(values='count', index='id', columns='down_event')
+                    ).fill_null(0).lazy()
+    
+    # Rename columns to a generic format
+    cols = event_stats.columns[1:]  # Skip the 'id' column
+    for i, col in enumerate(cols):
+        event_stats = event_stats.rename({col: f'punctuation_{i+1}'})
+
+    tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
+    ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
+
+    return tr_feats, ts_feats
