@@ -971,7 +971,6 @@ def essay_sents_per_par(df):
     df['sent_per_par'] = df['paragraph'].apply(lambda x: re.split('\\.|\\?|\\!',x))
     df = df.explode('sent_per_par')
     df = df[df['sent_per_par'].str.strip() != '']
-    print(len(df))
     df['sent_per_par'] = df['sent_per_par'].apply(lambda x: x.replace('\n','').strip())
     df = df.groupby(['id','paragraph'])['sent_per_par'].count().reset_index()
     df = df[df['paragraph'].str.strip() != ''].drop('paragraph', axis=1)

@@ -123,7 +123,7 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
     for iter in range(iterations):
         skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-        model = xgb.XGBRegressor(**param, random_state = 42+ iter) # early_stopping_rounds=250, 
+        model = xgb.XGBRegressor(**param, random_state = 42+ iter, verbosity=0) # early_stopping_rounds=250, 
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
@@ -136,7 +136,8 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
             model.fit(
                 train_x, train_y, 
-                eval_set=[(valid_x, valid_y)])
+                eval_set=[(valid_x, valid_y)],
+                verbose=False)
             
             #print(model.best_iteration)
             valid_predictions = model.predict(valid_x)
@@ -152,8 +153,8 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
         final_std = np.std(valid_preds['preds'])
         cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    #print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
     return test_preds, valid_preds, final_rmse, model 
 
 def load_feature_set(base_dir, feature_type, is_train=True):
