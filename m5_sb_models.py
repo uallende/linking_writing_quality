@@ -7,7 +7,14 @@ from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
 from itertools import combinations
 from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler
 
+def preprocess_feats(feats, scaler=StandardScaler()):
+    feats.replace([np.inf, -np.inf], np.nan, inplace=True)
+    feats.fillna(-1e10, inplace=True)
+    feats_columns = feats.columns
+    feats.loc[:, feats_columns != 'id'] = scaler.fit_transform(feats.loc[:, feats_columns != 'id'])
+    return feats
 
 def train_valid_split(data_x, data_y, train_idx, valid_idx):
     x_train = data_x.iloc[train_idx]
