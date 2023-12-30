@@ -734,8 +734,8 @@ def p_burst_feats(train_logs, test_logs, time_agg=2):
 
         temp = df.with_columns(pl.col('up_time').shift().over('id').alias('up_time_lagged'))
         temp = temp.with_columns((abs(pl.col('down_time') - pl.col('up_time_lagged')) / 1000).fill_null(0).alias('time_diff'))
-        # temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
-        temp = temp.filter(pl.col('activity').is_in(['Input']))
+        temp = temp.filter(pl.col('activity').is_in(['Input', 'Remove/Cut']))
+        #temp = temp.filter(pl.col('activity').is_in(['Input']))
 
         temp = temp.with_columns(pl.col('time_diff')< time_agg)
 
@@ -1120,6 +1120,7 @@ def text_changes_counts(train_logs, test_logs):
     text_changes = ['\n', ':', 'NoChange', '/', ' ', ';', '\\', '=']
     logs = pl.concat([train_logs, test_logs], how = 'vertical')
 
+    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()})
     tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
     ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
 
@@ -1129,7 +1130,10 @@ def text_changes_counts(train_logs, test_logs):
                     .group_by(['id', 'text_change'])
                     .agg(pl.count()).collect()
                     .pivot(values='count', index='id', columns='text_change')
-                    ).fill_null(0).lazy()
+                    ).fill_null(0)
+
+    text_changes_stats = all_ids.join(text_changes_stats,on='id',how='left')
+    text_changes_stats = text_changes_stats.fill_null(0)  
 
     # Rename columns to a generic format
     cols = text_changes_stats.columns[1:]  # Skip the 'id' column
@@ -1144,9 +1148,10 @@ def text_changes_counts(train_logs, test_logs):
 
 def punctuations(train_logs, test_logs):
     print("< punctuations features >")
+    feats = []
     logs = pl.concat([train_logs, test_logs], how = 'vertical')
     punctuations = [':', '#', '%', '<', ')', '>', '+', '/', '(', '^', '_', ';', '@', '!', '$', '&', '*']
-
+    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()})
     tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
     ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
 
@@ -1156,8 +1161,11 @@ def punctuations(train_logs, test_logs):
                     .group_by(['id', 'down_event'])
                     .agg(pl.count()).collect()
                     .pivot(values='count', index='id', columns='down_event')
-                    ).fill_null(0).lazy()
-    
+                    ).fill_null(0)
+
+    event_stats = all_ids.join(event_stats,on='id',how='left')
+    event_stats = event_stats.fill_null(0)
+
     # Rename columns to a generic format
     cols = event_stats.columns[1:]  # Skip the 'id' column
     for i, col in enumerate(cols):

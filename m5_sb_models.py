@@ -2,9 +2,14 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
+import torch
+import catboost as cb
+
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
+from sklearn import svm
 from lightgbm import LGBMRegressor
+from pytorch_tabnet.tab_model import TabNetRegressor
 from itertools import combinations
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
@@ -38,10 +43,11 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
     for iter in range(iterations):
 
         skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-        model = LGBMRegressor(**param, random_state = 42 + iter)
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = LGBMRegressor(**param, random_state = 42 + iter)
             model.fit(train_x, train_y)
 
             # model.fit(
@@ -382,4 +388,148 @@ def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
 
     print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
     print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model 
+
+def TabNet_pipeline(train_feats, test_feats, params):
+
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    #DEVICE = 'cpu'
+
+    def train_valid_split(data_x, data_y, train_idx, valid_idx):
+        x_train = data_x.loc[train_idx].values
+        y_train = data_y[train_idx].values.reshape(-1,1)
+        x_valid = data_x.loc[valid_idx].values
+        y_valid = data_y[valid_idx].values.reshape(-1,1)
+        return x_train, y_train, x_valid, y_valid
+
+    def preprocess_feats(feats, scaler=StandardScaler()):
+        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
+        feats = np.where(np.isinf(feats), np.nan, feats)
+        feats = np.nan_to_num(feats, nan=-1e6)
+        return scaler.fit_transform(feats)
+    
+    test_x = test_feats.drop(columns = ['id'])
+    test_x = preprocess_feats(test_x)
+
+    x = train_feats.drop(['id', 'score'], axis=1)
+    y = train_feats['score']
+
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(1):
+        skf = StratifiedKFold(n_splits=10, random_state=42+iter, shuffle=True)
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            model = TabNetRegressor(**params, device_name=DEVICE, verbose=0)
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            train_x = preprocess_feats(train_x)
+            valid_x  = preprocess_feats(valid_x)
+
+            model.fit(
+                X_train = train_x, y_train = train_y,
+                eval_set = [(train_x, train_y), (valid_x, valid_y)],
+                max_epochs = 1000,
+                patience = 70,
+            )
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train_feats.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+            torch.cuda.empty_cache()
+            del train_x, train_y, valid_x, valid_y
+
+    final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+    final_std = np.std(valid_preds['preds'])
+    cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model 
+
+def catboost_pipeline(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = cb.CatBoostRegressor(**param, random_state = 42 + iter)
+            model.fit(train_x, train_y)
+
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+
+    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    return test_preds, valid_preds, final_rmse, model 
+
+def svr_pipeline(train, test, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = []
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = svm.SVR(kernel='rbf', C=1.0, epsilon=0.1)
+            model.fit(train_x, train_y)
+
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            test_preds.append(test_predictions)
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+
+    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
+    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 

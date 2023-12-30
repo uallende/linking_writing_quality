@@ -44,6 +44,18 @@ xgb_params = {
     'n_estimators': 1024 
     }
 
+# FROM KAGGLE
+xgb_param={
+'reg_alpha': 0.00087,
+'reg_lambda': 2.5428,
+'colsample_bynode': 0.78390,
+'subsample': 0.89942, 
+'eta': 0.04730, 
+'max_depth': 3, 
+'n_estimators': 1024,
+'eval_metric': 'rmse'
+}
+
 xgb_params_2 = {
     'objective': 'reg:squarederror', 
     'base_score': None, 
