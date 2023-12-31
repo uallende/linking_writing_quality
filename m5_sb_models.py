@@ -136,11 +136,11 @@ def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
     for iter in range(iterations):
         skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-        model = xgb.XGBRegressor(**param, random_state = 42+ iter, verbosity=0) # early_stopping_rounds=250, 
 
         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            model = xgb.XGBRegressor(**param, random_state = 42+ iter, verbosity=0) 
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            
+
             # model.fit(
             #     train_x, train_y, 
             #     eval_set=[(valid_x, valid_y)],
@@ -356,12 +356,30 @@ def calculate_weights(train):
 
     return weights
 
-def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
+def ridge_pipeline(train_feats, test_feats, param, n_splits=10, iterations=5):
         
-    x = train.drop(['id', 'score'], axis=1)
-    y = train['score'].values
-    test_x = test.drop(columns = ['id'])
- 
+    def preprocess_feats(feats, scaler=StandardScaler()):
+        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
+        feats = np.where(np.isinf(feats), np.nan, feats)
+        feats = np.nan_to_num(feats, nan=-1e6)
+        return scaler.fit_transform(feats)
+    
+    tr_ids = train_feats.id
+    ts_ids = test_feats.id
+    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
+
+    feats = pd.concat([train_feats, test_feats], axis=0)
+    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
+
+    train_feats = feats[feats['id'].isin(tr_ids)]
+    test_feats = feats[feats['id'].isin(ts_ids)]
+
+    x = train_feats.drop(['id', 'score'], axis=1)
+    y = train_feats['score']
+
+    test_x = test_feats.drop(columns = ['id', 'score'])
+    test_x = preprocess_feats(test_x)
+
     test_preds = []
     valid_preds = pd.DataFrame()
 
@@ -377,7 +395,7 @@ def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
 
-            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df = train_feats.loc[valid_index][['id','score']]
             tmp_df['preds'] = valid_predictions
             tmp_df['iteration'] = i + 1
             valid_preds = pd.concat([valid_preds, tmp_df])
@@ -393,7 +411,7 @@ def ridge_pipeline(train, test, param, n_splits=10, iterations=5):
 def TabNet_pipeline(train_feats, test_feats, params):
 
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-    #DEVICE = 'cpu'
+    # DEVICE = 'cpu'
 
     def train_valid_split(data_x, data_y, train_idx, valid_idx):
         x_train = data_x.loc[train_idx].values
@@ -408,11 +426,21 @@ def TabNet_pipeline(train_feats, test_feats, params):
         feats = np.nan_to_num(feats, nan=-1e6)
         return scaler.fit_transform(feats)
     
-    test_x = test_feats.drop(columns = ['id'])
-    test_x = preprocess_feats(test_x)
+    tr_ids = train_feats.id
+    ts_ids = test_feats.id
+    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
+
+    feats = pd.concat([train_feats, test_feats], axis=0)
+    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
+
+    train_feats = feats[feats['id'].isin(tr_ids)]
+    test_feats = feats[feats['id'].isin(ts_ids)]
 
     x = train_feats.drop(['id', 'score'], axis=1)
     y = train_feats['score']
+
+    test_x = test_feats.drop(columns = ['id', 'score'])
+    test_x = preprocess_feats(test_x)
 
     test_preds = []
     valid_preds = pd.DataFrame()
@@ -423,8 +451,6 @@ def TabNet_pipeline(train_feats, test_feats, params):
 
             model = TabNetRegressor(**params, device_name=DEVICE, verbose=0)
             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            train_x = preprocess_feats(train_x)
-            valid_x  = preprocess_feats(valid_x)
 
             model.fit(
                 X_train = train_x, y_train = train_y,
@@ -471,11 +497,6 @@ def catboost_pipeline(train, test, param, n_splits=10, iterations=5):
             model = cb.CatBoostRegressor(**param, random_state = 42 + iter)
             model.fit(train_x, train_y)
 
-            # model.fit(
-            #     train_x, train_y, 
-            #     eval_set=[(valid_x, valid_y)],
-            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
-
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
@@ -493,12 +514,30 @@ def catboost_pipeline(train, test, param, n_splits=10, iterations=5):
     # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
 
-def svr_pipeline(train, test, n_splits=10, iterations=5):
+def svr_pipeline(train_feats, test_feats, n_splits=10, iterations=5):
         
-    x = train.drop(['id', 'score'], axis=1)
-    y = train['score'].values
-    test_x = test.drop(columns = ['id'])
- 
+    def preprocess_feats(feats, scaler=StandardScaler()):
+        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
+        feats = np.where(np.isinf(feats), np.nan, feats)
+        feats = np.nan_to_num(feats, nan=-1e6)
+        return scaler.fit_transform(feats)
+    
+    tr_ids = train_feats.id
+    ts_ids = test_feats.id
+    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
+
+    feats = pd.concat([train_feats, test_feats], axis=0)
+    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
+
+    train_feats = feats[feats['id'].isin(tr_ids)]
+    test_feats = feats[feats['id'].isin(ts_ids)]
+
+    test_x = test_feats.drop(columns = ['id', 'score'])
+    test_x = preprocess_feats(test_x)
+
+    x = train_feats.drop(['id', 'score'], axis=1)
+    y = train_feats['score']
+
     test_preds = []
     valid_preds = pd.DataFrame()
 
@@ -512,16 +551,11 @@ def svr_pipeline(train, test, n_splits=10, iterations=5):
             model = svm.SVR(kernel='rbf', C=1.0, epsilon=0.1)
             model.fit(train_x, train_y)
 
-            # model.fit(
-            #     train_x, train_y, 
-            #     eval_set=[(valid_x, valid_y)],
-            #     callbacks=[lgb.early_stopping(50, first_metric_only=True, verbose=False)])
-
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
             test_preds.append(test_predictions)
 
-            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df = train_feats.loc[valid_index][['id','score']]
             tmp_df['preds'] = valid_predictions
             tmp_df['iteration'] = i + 1
             valid_preds = pd.concat([valid_preds, tmp_df])
@@ -533,3 +567,29 @@ def svr_pipeline(train, test, n_splits=10, iterations=5):
     # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
     # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
+
+def average_model_predictions(model_preds):
+    return model_preds.groupby('id')['preds'].mean().values
+
+# Weighted Average Combinations
+def calculate_weighted_avg(weights, model_predictions):
+    weighted_preds = np.zeros_like(list(model_predictions.values())[0])
+    for model, weight in zip(model_predictions.keys(), weights):
+        weighted_preds += model_predictions[model] * weight
+    return weighted_preds / np.sum(weights)
+
+best_rmse = float('inf')
+best_combination = None
+best_weights = None
+
+def average_test_predictions(test_preds):
+    # Assuming test_preds is a list of arrays (one array per fold/iteration)
+    return np.mean(np.vstack(test_preds), axis=0)
+
+# Apply the best weights to calculate the blended test predictions
+def calculate_weighted_avg_for_test(weights, model_predictions):
+    weighted_preds = np.zeros_like(list(model_predictions.values())[0])
+    total_weight = np.sum(weights)
+    for model, weight in zip(model_predictions.keys(), weights):
+        weighted_preds += model_predictions[model] * weight / total_weight
+    return weighted_preds

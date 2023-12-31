@@ -14,3 +14,6 @@ SPF_train_test
 SPF_train_test/
 SPF_feats
 SPF_feats/
+catboost_info
+catboost_info/
+catboost_info/*

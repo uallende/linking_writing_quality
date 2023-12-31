@@ -753,10 +753,10 @@ def p_burst_feats(train_logs, test_logs, time_agg=2):
             p_burst_max = pl.col('count').max(),
             p_burst_min = pl.col('count').min(),
             p_burst_median = pl.col('count').median(),
-            # burst_skew = pl.col('count').skew(),
-            # burst_kurt = pl.col('count').kurtosis(),
-            # burst_q1 = pl.col('count').quantile(0.25),
-            # burst_q3 = pl.col('count').quantile(0.75),
+            p_burst_skew = pl.col('count').skew(),
+            p_burst_kurt = pl.col('count').kurtosis(),
+            p_burst_q1 = pl.col('count').quantile(0.25),
+            p_burst_q3 = pl.col('count').quantile(0.75),
 
         )
         feats.append(p_burst)
@@ -775,12 +775,12 @@ def p_burst_feats(train_logs, test_logs, time_agg=2):
 
     return feats[0], feats[1]
 
-import polars as pl
-
 def r_burst_feats(train_logs, test_logs):
     print("< R-burst features >")    
     feats = []
-    original_test_ids = test_logs.select('id').unique()  
+    tr_ids = pl.DataFrame({'id': train_logs.select(pl.col('id')).unique().collect().to_series().to_list()})
+    ts_ids = pl.DataFrame({'id': test_logs.select(pl.col('id')).unique().collect().to_series().to_list()})
+
 
     for logs in [train_logs, test_logs]:
         df = logs.clone()
@@ -799,21 +799,10 @@ def r_burst_feats(train_logs, test_logs):
             r_burst_min = pl.col('count').min(),
             r_burst_median = pl.col('count').median()
         )
-        feats.append(r_burst)
-
-    # Check if the second dataframe (test_logs) is empty and fill with zeros if so
-    if feats[1].collect().height == 0:
-        zero_filled_df = original_test_ids.with_columns([pl.lit(0).alias(col) for col in feats[0].columns if col != 'id'])
-        feats[1] = zero_filled_df
-
-    [feat.collect() for feat in feats]
-    missing_cols = set(feats[0].columns) - set(feats[1].columns)
-            
-    for col in missing_cols:
-        zero_series = pl.repeat(0, n=len(feats[1])).alias(col)
-        feats[1] = feats[1].with_columns(zero_series)
-
-    return feats[0], feats[1]
+        feats.append(r_burst.collect())
+    feats[0] = tr_ids.join(feats[0], on='id', how='left').fill_null(0)
+    feats[1] = ts_ids.join(feats[1], on='id', how='left').fill_null(0)
+    return feats[0].lazy(), feats[1].lazy()
 
 def q1(x):
     return x.quantile(0.25)
@@ -1089,7 +1078,7 @@ def word_timings(train_logs, test_logs):
         feats.append(word_timings)
     return feats[0], feats[1]
 
-def word_wait_shift(train_logs, test_logs,shift):
+def word_wait_shift(train_logs, test_logs, shift=1):
     print('< word_wait_shift >')
     feats = []
     for data in [train_logs,test_logs]:
@@ -1143,7 +1132,7 @@ def text_changes_counts(train_logs, test_logs):
     tr_feats = text_changes_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = text_changes_stats.filter(pl.col('id').is_in(ts_ids))
 
-    return tr_feats, ts_feats
+    return tr_feats.lazy(), ts_feats.lazy()
 
 
 def punctuations(train_logs, test_logs):
@@ -1174,4 +1163,4 @@ def punctuations(train_logs, test_logs):
     tr_feats = event_stats.filter(pl.col('id').is_in(tr_ids))
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
 
-    return tr_feats, ts_feats
+    return tr_feats.lazy(), ts_feats.lazy()
