@@ -17,3 +17,4 @@ SPF_feats/
 catboost_info
 catboost_info/
 catboost_info/*
+SPF_blends.ipynb
