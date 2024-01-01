@@ -1169,8 +1169,9 @@ def remove_words_time_spent(train_logs, test_logs):
     print(f'< remove_words_time_spent >')
     feats = []
     ts_ids = pl.DataFrame({'id': test_logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
 
-    for data in [train_logs, test_logs]:
+    for data in [tr_logs, ts_logs]:
         logs = data.clone()
         logs = logs.sort(['id', 'event_id'])
         logs = logs.filter(pl.col('activity') == 'Remove/Cut')
@@ -1208,8 +1209,8 @@ def remove_words_time_spent(train_logs, test_logs):
 def words_duration_stats(train_logs, test_logs):
     print('< words_duration_stats >')
     feats = []
-
-    for data in [train_logs, test_logs]:
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    for data in [tr_logs, ts_logs]:
         logs = data.clone()
         logs = logs.sort(['id', 'event_id'])
         logs = logs.select(pl.col(['id', 'event_id', 'word_count', 'down_time', 'up_time', 'action_time']))
@@ -1246,9 +1247,11 @@ def words_duration_stats(train_logs, test_logs):
 
     return feats[0], feats[1]
 
-def words_p_burst(train_logs, test_logs, time_agg=650):
-
-    logs = pl.concat([train_logs, test_logs], how='vertical')
+def words_p_burst(train_logs, test_logs, time_agg=2500):
+    print('< words_duration_stats >')
+    
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    logs = pl.concat([tr_logs, ts_logs], how='vertical')
 
     all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
     tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
