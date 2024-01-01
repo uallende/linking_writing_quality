@@ -1164,3 +1164,140 @@ def punctuations(train_logs, test_logs):
     ts_feats = event_stats.filter(pl.col('id').is_in(ts_ids))
 
     return tr_feats.lazy(), ts_feats.lazy()
+
+def remove_words_time_spent(train_logs, test_logs):
+    print(f'< remove_words_time_spent >')
+    feats = []
+    ts_ids = pl.DataFrame({'id': test_logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.filter(pl.col('activity') == 'Remove/Cut')
+
+        logs = logs.with_columns(
+            pl.col('down_time')
+            .diff()
+            .over('id')
+            .fill_null(0)
+            .alias('down_time_diff')
+        )
+
+        logs = logs.group_by('id', 'word_count').agg(
+            remove_time_spent=pl.col('down_time_diff').sum()
+        )
+
+        word_r_stats = logs.group_by('id').agg(
+            word_r_stats_count=pl.col('remove_time_spent').count(),
+            word_r_stats_mean=pl.col('remove_time_spent').mean(),
+            word_r_stats_sum=pl.col('remove_time_spent').sum(),
+            word_r_stats_std=pl.col('remove_time_spent').std(),
+            word_r_stats_max=pl.col('remove_time_spent').max(),
+            word_r_stats_median=pl.col('remove_time_spent').median(),
+            word_r_stats_skew=pl.col('remove_time_spent').skew(),
+            word_r_stats_kurt=pl.col('remove_time_spent').kurtosis(),
+            word_r_stats_q3=pl.col('remove_time_spent').quantile(0.75)
+        )
+        
+        feats.append(word_r_stats)
+
+    feats[1] = ts_ids.join(feats[1], on='id', how='left')
+
+    return feats[0], feats[1]
+
+def words_duration_stats(train_logs, test_logs):
+    print('< words_duration_stats >')
+    feats = []
+
+    for data in [train_logs, test_logs]:
+        logs = data.clone()
+        logs = logs.sort(['id', 'event_id'])
+        logs = logs.select(pl.col(['id', 'event_id', 'word_count', 'down_time', 'up_time', 'action_time']))
+
+        logs = logs.with_columns(
+            pl.col('down_time')
+            .diff()
+            .over('id')
+            .fill_null(0)
+            .alias('down_time_diff')
+        )
+
+        logs = logs.with_columns(
+            pl.cum_sum('down_time_diff')
+            .over(['id', 'word_count'])
+            .alias('time_per_word')
+        )
+
+        logs = logs.group_by(['id', 'word_count']).agg(
+            pl.last('time_per_word')
+        ).sort(['id', 'word_count'])
+
+        words_duration = logs.group_by(['id']).agg(
+            words_duration_mean=pl.col('time_per_word').mean(),
+            words_duration_sum=pl.col('time_per_word').sum(),
+            words_duration_std=pl.col('time_per_word').std(),
+            words_duration_max=pl.col('time_per_word').max(),
+            words_duration_median=pl.col('time_per_word').median(),
+            words_duration_skew=pl.col('time_per_word').skew(),
+            words_duration_kurt=pl.col('time_per_word').kurtosis(),
+            words_duration_q3=pl.col('time_per_word').quantile(0.75)
+        )
+        feats.append(words_duration)
+
+    return feats[0], feats[1]
+
+def words_p_burst(train_logs, test_logs, time_agg=650):
+
+    logs = pl.concat([train_logs, test_logs], how='vertical')
+
+    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+
+    logs = logs.sort(['id', 'event_id'])
+    logs = logs.select(pl.col(['id', 'event_id', 'word_count', 'down_time', 'up_time', 'action_time']))
+
+    logs = logs.with_columns(
+        pl.col('down_time')
+        .diff()
+        .over('id')
+        .fill_null(0)
+        .alias('down_time_diff')
+    )
+
+    logs = logs.with_columns(
+        pl.cum_sum('down_time_diff')
+        .over(['id', 'word_count'])
+        .alias('time_per_word')
+    )
+
+    logs = logs.group_by(['id', 'word_count']).agg(
+        pl.last('time_per_word')
+    ).sort(['id', 'word_count'])
+
+    temp = logs.with_columns(pl.col('time_per_word') < time_agg)
+
+    rle_grp = temp.with_columns(
+        id_runs=pl.struct('time_per_word', 'id').rle_id()
+    ).filter(pl.col('time_per_word')).sort('id', 'word_count')
+
+    rle_grp = rle_grp.group_by('id', 'id_runs').count().sort('id', 'id_runs')
+    rle_grp = rle_grp.filter(pl.col('count') > 1)
+
+    p_burst = rle_grp.group_by(['id']).agg(
+        p_burst_count=pl.col('count').count(),
+        p_burst_mean=pl.col('count').mean(),
+        p_burst_sum=pl.col('count').sum(),
+        p_burst_std=pl.col('count').std(),
+        p_burst_max=pl.col('count').max(),
+        p_burst_median=pl.col('count').median(),
+        p_burst_skew=pl.col('count').skew(),
+        p_burst_kurt=pl.col('count').kurtosis(),
+        p_burst_q3=pl.col('count').quantile(0.75)
+    )
+
+    p_burst = all_ids.join(p_burst, on='id', how='left').fill_null(0)
+
+    tr = p_burst.filter(pl.col('id').is_in(tr_ids))
+    ts = p_burst.filter(pl.col('id').is_in(ts_ids))
+    return tr, ts
