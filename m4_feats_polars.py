@@ -1208,6 +1208,7 @@ def remove_words_time_spent(train_logs, test_logs):
 
 def words_duration_stats(train_logs, test_logs):
     print('< words_duration_stats >')
+    
     feats = []
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     for data in [tr_logs, ts_logs]:
@@ -1249,7 +1250,7 @@ def words_duration_stats(train_logs, test_logs):
 
 def words_p_burst(train_logs, test_logs, time_agg=2500):
     print('< words_duration_stats >')
-    
+
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     logs = pl.concat([tr_logs, ts_logs], how='vertical')
 
