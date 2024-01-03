@@ -1204,7 +1204,7 @@ def remove_words_time_spent(train_logs, test_logs):
 
     feats[1] = ts_ids.join(feats[1], on='id', how='left')
 
-    return feats[0], feats[1]
+    return feats[0].fill_null(0), feats[1].fill_null(0)
 
 def words_duration_stats(train_logs, test_logs):
     print('< words_duration_stats >')

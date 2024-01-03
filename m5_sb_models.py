@@ -18,7 +18,8 @@ def preprocess_feats(feats, scaler=StandardScaler()):
     feats.replace([np.inf, -np.inf], np.nan, inplace=True)
     feats.fillna(-1e10, inplace=True)
     feats_columns = feats.columns
-    feats.loc[:, feats_columns != 'id'] = scaler.fit_transform(feats.loc[:, feats_columns != 'id'])
+    cols_to_scale = feats_columns[(feats_columns != 'id') & (feats_columns != 'score')]
+    feats.loc[:, cols_to_scale] = scaler.fit_transform(feats.loc[:, cols_to_scale])
     return feats
 
 def train_valid_split(data_x, data_y, train_idx, valid_idx):
