@@ -22,13 +22,14 @@ def amend_event_id_order(train_logs, test_logs):
 def normalise_up_down_times(train_logs, test_logs):
     new_logs = []
     for logs in [train_logs, test_logs]:
+        logs = logs.sort('id','event_id')
         min_down_time = logs.group_by('id').agg(pl.min('down_time').alias('min_down_time'))
         logs = logs.join(min_down_time, on='id', how='left')
         logs = logs.with_columns([(pl.col('down_time') - pl.col('min_down_time')).alias('normalised_down_time')])
         logs = logs.with_columns([(pl.col('normalised_down_time') + pl.col('action_time')).alias('normalised_up_time')])
         logs = logs.drop(['min_down_time', 'down_time', 'up_time'])
         logs = logs.rename({'normalised_down_time': 'down_time', 'normalised_up_time': 'up_time'})
-        new_logs.append(logs.sort(['id','event_id'], descending=[True,True]))
+        new_logs.append(logs.sort(['id','event_id'], descending=[False,False]))
     return new_logs[0], new_logs[1]
 
 # Helper functions
@@ -1305,3 +1306,102 @@ def words_p_burst(train_logs, test_logs, time_agg=2500):
     tr = p_burst.filter(pl.col('id').is_in(tr_ids))
     ts = p_burst.filter(pl.col('id').is_in(ts_ids))
     return tr, ts
+
+def sentences_timings(train_logs, test_logs):
+    print(f' < sentences timings> ')
+    feats = []
+    tr_logs,ts_logs = normalise_up_down_times(train_logs,test_logs)
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+
+        logs = logs.with_columns(
+            pl.col('cursor_position')
+            .diff()
+            .over('id')
+            .fill_null(0)
+            .alias('cursor_pos_diff'))
+        
+        logs = logs.with_columns(
+            pl.when(pl.col('cursor_pos_diff')< -1)
+            .then(True)
+            .otherwise(False)
+            .alias('cursor_moved_new_sentence'))
+
+        print(logs.collect().head(6))
+        logs = logs.with_columns(
+            pl.col('down_event')
+            .is_in(['.','?','!']).alias('is_end_of_sentence_mark'))
+
+        logs = logs.with_columns(
+            (pl.col('is_end_of_sentence_mark') | (pl.col('cursor_moved_new_sentence')))
+            .cum_sum()
+            .over('id')
+            .shift(1)
+            .fill_null(0)
+            .alias('sentence_number')
+        )
+        replace_end_of_sentence = logs.with_columns(
+            pl.col('cursor_pos_diff')
+            .cum_sum()
+            .over('id','sentence_number')
+            .alias('calc_is_sent_removed'))
+
+        replace_end_of_sentence = replace_end_of_sentence.with_columns(
+            pl.when(pl.col('calc_is_sent_removed') == -1)
+            .then(True)
+            .otherwise(False)
+            .alias('removed_end_of_sentence'))
+
+        replace_end_of_sentence = replace_end_of_sentence.group_by('id','sentence_number').agg([
+            pl.col('calc_is_sent_removed').min().alias('min_value')
+        ]).with_columns(
+            (pl.col('min_value') == -1).alias('is_min_minus_one')
+        ).sort('id','sentence_number')
+
+        replace_end_of_sentence = replace_end_of_sentence.with_columns(pl.col('is_min_minus_one').shift(-1))
+        logs = logs.join(replace_end_of_sentence, on=('id','sentence_number'), how='left')
+        logs = logs.with_columns(
+            pl.when('is_min_minus_one')
+            .then(not('cursor_moved_new_sentence'))
+            .otherwise(pl.col('cursor_moved_new_sentence')).alias('is_end_of_sentence_mark'))
+
+        logs = logs.drop('event_id','up_time','action_time','up_event','text_change','min_value','is_min_minus_one','word_count','sentence_number')
+
+        ### AFTER RECALCULATING SENTENCES
+
+        logs = logs.with_columns(
+            (pl.col('is_end_of_sentence_mark'))
+            .cum_sum()
+            .over('id')
+            .shift(1)
+            .fill_null(0)
+            .alias('sentence_number')
+        )
+
+        logs = logs.with_columns(
+            pl.col('down_time')
+            .diff()
+            .over('id','sentence_number')
+            .fill_null(0)
+            .alias('down_time_diff'))
+
+        logs = logs.with_columns(pl.col('down_time_diff').cum_sum().over('id','sentence_number').fill_null(0).alias('sentence_duration'))
+
+        sent = logs.group_by('id','sentence_number').agg(
+            pl.last('sentence_duration')).sort('id','sentence_number')
+
+        sent = sent.group_by(['id']).agg(
+                        sent_timings_mean = pl.col('sentence_duration').mean(),
+                        sent_timings_sum = pl.col('sentence_duration').sum(),
+                        sent_timings_std = pl.col('sentence_duration').std(),
+                        sent_timings_max = pl.col('sentence_duration').max(),
+                        sent_timings_median = pl.col('sentence_duration').median(),
+                        sent_timingse_q1 = pl.col('sentence_duration').quantile(0.25),
+                        sent_timingse_q3 = pl.col('sentence_duration').quantile(0.75),
+                        sent_timingse_kurt = pl.col('sentence_duration').kurtosis(),
+                        sent_timingse_skew = pl.col('sentence_duration').skew(),
+        )
+
+        feats.append(sent)
+    return feats[0], feats[1]
