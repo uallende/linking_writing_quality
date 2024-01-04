@@ -2,9 +2,11 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
-import torch
+import torch, joblib
 import catboost as cb
 
+from lightautoml.automl.presets.tabular_presets import TabularAutoML
+from lightautoml.tasks import Task
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from sklearn import svm
@@ -594,3 +596,108 @@ def calculate_weighted_avg_for_test(weights, model_predictions):
     for model, weight in zip(model_predictions.keys(), weights):
         weighted_preds += model_predictions[model] * weight / total_weight
     return weighted_preds
+
+
+def map_class(x, task, reader):
+    if task.name == 'multiclass':
+        return reader[x]
+    else:
+        return x
+
+mapped = np.vectorize(map_class)
+
+def score(task, y_true, y_pred):
+    if task.name == 'binary':
+        return roc_auc_score(y_true, y_pred)
+    elif task.name == 'multiclass':
+        return log_loss(y_true, y_pred)
+    elif task.name == 'reg' or task.name == 'multi:reg':
+        return mean_squared_error(y_true, y_pred, squared=False)
+    else:
+        raise 'Task is not correct.'
+        
+def take_pred_from_task(pred, task):
+    if task.name == 'binary' or task.name == 'reg':
+        return pred[:, 0]
+    elif task.name == 'multiclass' or task.name == 'multi:reg':
+        return pred
+    else:
+        raise 'Task is not correct.'
+        
+def use_plr(USE_PLR):
+    if USE_PLR:
+        return "plr"
+    else:
+        return "cont"
+    
+def automl_pipeline(train_feats, test_feats):
+    oof_preds = []
+    test_preds = []
+    ITERATIONS = 1
+    TRAIN_BS = [128,192,256,316,512]  # list(np.arange(64,64*6,64))
+    RANDOM_STATE = 42
+    N_THREADS = 2
+    N_FOLDS = 10
+    TEST_SIZE = 0.15
+    VAL_SIZE = 0.15
+    TIMEOUT = 10000
+    ADVANCED_ROLES = False
+    USE_QNT = True
+    TASK = 'reg'
+    USE_PLR = True
+    USE_FS = False
+    TARGET_NAME = 'score'
+    FEATURE_RATIO = 0.8
+
+    for i in range(ITERATIONS):
+        for b in TRAIN_BS:
+                
+            np.random.seed(RANDOM_STATE+b)
+            torch.set_num_threads(N_THREADS)
+            task = Task(TASK)
+
+            roles = {
+                'target': TARGET_NAME,
+                'drop': ['id']
+            }
+            algo = 'denselight'
+            automl = TabularAutoML(
+                task = task, 
+                timeout = TIMEOUT,
+                cpu_limit = N_THREADS,
+                general_params = {"use_algos": [[algo]]},
+                nn_params = {
+                    "n_epochs": 350, 
+                    "bs": b, 
+                    "num_workers": 0, 
+                    "path_to_save": None, 
+                    "freeze_defaults": True,
+                },
+                nn_pipeline_params = {"use_qnt": USE_QNT, "use_te": False},
+                reader_params = {'n_jobs': N_THREADS, 'cv': N_FOLDS, 'random_state': RANDOM_STATE, 'advanced_roles': ADVANCED_ROLES},
+            )
+
+            oof_pred = automl.fit_predict(train_feats, roles = roles, verbose = 1)
+            test_pred = automl.predict(test_feats)    
+            joblib.dump(automl, f'automl_model_{b}_{i}.joblib')            
+
+            oof_preds.append(oof_pred)
+            test_preds.append(test_pred)
+            oof = score(task, mapped(train_feats[TARGET_NAME].values, task, automl.reader.class_mapping), take_pred_from_task(oof_pred.data, task))
+            denselight_list = [(oof, oof_pred.data[:, 0], test_pred.data[:, 0])]
+            print(f'RMSE: {oof}')
+
+    stacked_preds = np.stack([p.data[:, 0] for p in oof_preds])
+    oof_preds = np.mean(stacked_preds, axis=0)
+
+    stacked_test_preds = np.stack([p.data[:, 0] for p in test_preds])
+    test_preds = np.mean(stacked_test_preds, axis=0)
+
+    y = train_feats[TARGET_NAME].values
+    final_rmse = mean_squared_error(y, oof_preds, squared=False)
+    print(f'Final RMSE: {final_rmse}')
+
+    oof_df = train_feats[['id']].copy()
+    oof_df['preds'] = oof_df
+
+    return test_preds, oof_df, final_rmse
