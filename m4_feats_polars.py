@@ -1404,3 +1404,39 @@ def sentences_timings(train_logs, test_logs):
 
         feats.append(sent)
     return feats[0], feats[1]
+
+def activity_time_on_down_time(train_logs, test_logs):
+
+    print(' <activity_time_on_down_time> ')
+    feats = []
+    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+
+    for data in [tr_logs, ts_logs]:
+
+        logs = data.clone()
+        logs = logs.select('id','event_id','down_time','activity').filter(~pl.col('activity').str.contains('Move'))
+
+        logs = logs.with_columns(
+            pl.col('down_time')
+            .diff()
+            .over('id')
+            .fill_null(0)
+            .alias('down_time_diff'))
+
+        logs = logs.group_by('id','activity').agg(
+
+            mean_cumul_down_time_by_act = pl.col('down_time_diff').mean(),
+            median_cumul_down_time_by_act = pl.col('down_time_diff').median(),
+            std_cumul_down_time_by_act = pl.col('down_time_diff').std(),
+            qfirst_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.25),
+            qthird_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.275,
+
+        )).collect()
+
+        time_stats = logs.pivot(values=['mean_cumul_down_time_by_act','median_cumul_down_time_by_act',
+                                'std_cumul_down_time_by_act','qfirst_cumul_down_time_by_act',
+                                'qthird_cumul_down_time_by_act'],
+                                columns='activity', index='id').fill_null(0).sort('id')
+        
+        feats.append(time_stats)
+    return feats[0].lazy(), feats[1].lazy()
