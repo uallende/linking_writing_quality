@@ -1328,7 +1328,6 @@ def sentences_timings(train_logs, test_logs):
             .otherwise(False)
             .alias('cursor_moved_new_sentence'))
 
-        print(logs.collect().head(6))
         logs = logs.with_columns(
             pl.col('down_event')
             .is_in(['.','?','!']).alias('is_end_of_sentence_mark'))

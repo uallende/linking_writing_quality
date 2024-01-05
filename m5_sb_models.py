@@ -40,7 +40,7 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
     y = train['score'].values
     test_x = test.drop(columns = ['id'])
  
-    test_preds = []
+    test_preds = pd.DataFrame()
     valid_preds = pd.DataFrame()
 
     for iter in range(iterations):
@@ -60,7 +60,10 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
+            
+            test_tpm = test[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
 
             tmp_df = train.loc[valid_index][['id','score']]
             tmp_df['preds'] = valid_predictions
@@ -69,10 +72,227 @@ def lgb_pipeline(train, test, param, n_splits=10, iterations=5):
 
         final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
         final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+        
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
 
-    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
+    return test_preds, valid_preds, final_rmse, model 
+
+def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
+
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+    
+    test_preds = pd.DataFrame()
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+
+            model = xgb.XGBRegressor(**param, random_state = 42+iter, verbosity=0) 
+            model.fit(train_x, train_y, verbose=False)
+
+            # model.fit(
+            #     train_x, train_y, 
+            #     eval_set=[(valid_x, valid_y)],
+            #     verbose=False,
+            #     callbacks=[lgb.early_stopping(250, first_metric_only=True, verbose=False)])
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            
+            test_tpm = test[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
+
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
+    return test_preds, valid_preds, final_rmse, model 
+
+def ridge_pipeline(train_feats, test_feats, param, n_splits=10, iterations=5):
+        
+    def preprocess_feats(feats, scaler=StandardScaler()):
+        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
+        feats = np.where(np.isinf(feats), np.nan, feats)
+        feats = np.nan_to_num(feats, nan=-1e6)
+        return scaler.fit_transform(feats)
+    
+    tr_ids = train_feats.id
+    ts_ids = test_feats.id
+    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
+
+    feats = pd.concat([train_feats, test_feats], axis=0)
+    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
+
+    train_feats = feats[feats['id'].isin(tr_ids)]
+    test_feats = feats[feats['id'].isin(ts_ids)]
+
+    x = train_feats.drop(['id', 'score'], axis=1)
+    y = train_feats['score']
+
+    test_x = test_feats.drop(columns = ['id', 'score'])
+    test_x = preprocess_feats(test_x)
+
+    test_preds = pd.DataFrame()
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = Ridge(**param, random_state=42 + iter)
+            model.fit(train_x, train_y)
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            
+            test_tpm = test_feats[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
+
+            tmp_df = train_feats.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
+
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
+    return test_preds, valid_preds, final_rmse, model 
+
+
+def catboost_pipeline(train, test, param, n_splits=10, iterations=5):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns = ['id'])
+ 
+    test_preds = pd.DataFrame()
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = cb.CatBoostRegressor(**param, random_state = 42 + iter)
+            model.fit(train_x, train_y)
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            
+            test_tpm = test[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
+
+            tmp_df = train.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
+
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
+    return test_preds, valid_preds, final_rmse, model 
+
+def svr_pipeline(train_feats, test_feats, n_splits=10, iterations=5):
+        
+    def preprocess_feats(feats, scaler=StandardScaler()):
+        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
+        feats = np.where(np.isinf(feats), np.nan, feats)
+        feats = np.nan_to_num(feats, nan=-1e6)
+        return scaler.fit_transform(feats)
+    
+    tr_ids = train_feats.id
+    ts_ids = test_feats.id
+    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
+
+    feats = pd.concat([train_feats, test_feats], axis=0)
+    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
+
+    train_feats = feats[feats['id'].isin(tr_ids)]
+    test_feats = feats[feats['id'].isin(ts_ids)]
+
+    test_x = test_feats.drop(columns = ['id', 'score'])
+    test_x = preprocess_feats(test_x)
+
+    x = train_feats.drop(['id', 'score'], axis=1)
+    y = train_feats['score']
+
+    test_preds = pd.DataFrame()
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
+
+        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
+
+            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
+            model = svm.SVR(kernel='rbf', C=1.0, epsilon=0.1)
+            model.fit(train_x, train_y)
+
+            valid_predictions = model.predict(valid_x)
+            test_predictions = model.predict(test_x)
+            
+            test_tpm = test_feats[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
+
+            tmp_df = train_feats.loc[valid_index][['id','score']]
+            tmp_df['preds'] = valid_predictions
+            tmp_df['iteration'] = i + 1
+            valid_preds = pd.concat([valid_preds, tmp_df])
+
+        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+        final_std = np.std(valid_preds['preds'])
+        
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
+
+    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
     return test_preds, valid_preds, final_rmse, model 
 
 def lgb_pipeline_kfold(train, test, param, n_splits=10, iterations=5):
@@ -127,51 +347,6 @@ def lgb_full_train_set(train, test, param, iterations=50):
         test_preds.append(test_predictions)
 
     return test_preds, model 
-
-def xgb_pipeline(train, test, param, n_splits=10, iterations=5):
-
-    x = train.drop(['id', 'score'], axis=1)
-    y = train['score'].values
-    test_x = test.drop(columns = ['id'])
-    
-    test_preds = []
-    valid_preds = pd.DataFrame()
-
-    for iter in range(iterations):
-        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-
-        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
-            model = xgb.XGBRegressor(**param, random_state = 42+ iter, verbosity=0) 
-            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-
-            # model.fit(
-            #     train_x, train_y, 
-            #     eval_set=[(valid_x, valid_y)],
-            #     verbose=False,
-            #     callbacks=[lgb.early_stopping(250, first_metric_only=True, verbose=False)])
-
-            model.fit(
-                train_x, train_y, 
-                eval_set=[(valid_x, valid_y)],
-                verbose=False)
-            
-            #print(model.best_iteration)
-            valid_predictions = model.predict(valid_x)
-            test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
-
-            tmp_df = train.loc[valid_index][['id','score']]
-            tmp_df['preds'] = valid_predictions
-            tmp_df['iteration'] = i + 1
-            valid_preds = pd.concat([valid_preds, tmp_df])
-
-        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-        final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
-
-    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    #print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse)}')
-    return test_preds, valid_preds, final_rmse, model 
 
 def load_feature_set(base_dir, feature_type, is_train=True):
     subdir = 'train' if is_train else 'test'
@@ -359,58 +534,6 @@ def calculate_weights(train):
 
     return weights
 
-def ridge_pipeline(train_feats, test_feats, param, n_splits=10, iterations=5):
-        
-    def preprocess_feats(feats, scaler=StandardScaler()):
-        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
-        feats = np.where(np.isinf(feats), np.nan, feats)
-        feats = np.nan_to_num(feats, nan=-1e6)
-        return scaler.fit_transform(feats)
-    
-    tr_ids = train_feats.id
-    ts_ids = test_feats.id
-    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
-
-    feats = pd.concat([train_feats, test_feats], axis=0)
-    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
-
-    train_feats = feats[feats['id'].isin(tr_ids)]
-    test_feats = feats[feats['id'].isin(ts_ids)]
-
-    x = train_feats.drop(['id', 'score'], axis=1)
-    y = train_feats['score']
-
-    test_x = test_feats.drop(columns = ['id', 'score'])
-    test_x = preprocess_feats(test_x)
-
-    test_preds = []
-    valid_preds = pd.DataFrame()
-
-    for iter in range(iterations):
-
-        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-
-        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
-            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            model = Ridge(**param, random_state=42 + iter)
-            model.fit(train_x, train_y)
-            valid_predictions = model.predict(valid_x)
-            test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
-
-            tmp_df = train_feats.loc[valid_index][['id','score']]
-            tmp_df['preds'] = valid_predictions
-            tmp_df['iteration'] = i + 1
-            valid_preds = pd.concat([valid_preds, tmp_df])
-
-        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-        final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
-
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-    return test_preds, valid_preds, final_rmse, model 
-
 def TabNet_pipeline(train_feats, test_feats, params):
 
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -481,96 +604,6 @@ def TabNet_pipeline(train_feats, test_feats, params):
     # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
     return test_preds, valid_preds, final_rmse, model 
 
-def catboost_pipeline(train, test, param, n_splits=10, iterations=5):
-        
-    x = train.drop(['id', 'score'], axis=1)
-    y = train['score'].values
-    test_x = test.drop(columns = ['id'])
- 
-    test_preds = []
-    valid_preds = pd.DataFrame()
-
-    for iter in range(iterations):
-
-        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-
-        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
-
-            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            model = cb.CatBoostRegressor(**param, random_state = 42 + iter)
-            model.fit(train_x, train_y)
-
-            valid_predictions = model.predict(valid_x)
-            test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
-
-            tmp_df = train.loc[valid_index][['id','score']]
-            tmp_df['preds'] = valid_predictions
-            tmp_df['iteration'] = i + 1
-            valid_preds = pd.concat([valid_preds, tmp_df])
-
-        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-        final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
-
-    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-    return test_preds, valid_preds, final_rmse, model 
-
-def svr_pipeline(train_feats, test_feats, n_splits=10, iterations=5):
-        
-    def preprocess_feats(feats, scaler=StandardScaler()):
-        # Replace inf/-inf with NaN and then fill NaNs with a large negative number
-        feats = np.where(np.isinf(feats), np.nan, feats)
-        feats = np.nan_to_num(feats, nan=-1e6)
-        return scaler.fit_transform(feats)
-    
-    tr_ids = train_feats.id
-    ts_ids = test_feats.id
-    tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
-
-    feats = pd.concat([train_feats, test_feats], axis=0)
-    feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
-
-    train_feats = feats[feats['id'].isin(tr_ids)]
-    test_feats = feats[feats['id'].isin(ts_ids)]
-
-    test_x = test_feats.drop(columns = ['id', 'score'])
-    test_x = preprocess_feats(test_x)
-
-    x = train_feats.drop(['id', 'score'], axis=1)
-    y = train_feats['score']
-
-    test_preds = []
-    valid_preds = pd.DataFrame()
-
-    for iter in range(iterations):
-
-        skf = StratifiedKFold(n_splits=n_splits, random_state=42+iter, shuffle=True)
-
-        for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
-
-            train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-            model = svm.SVR(kernel='rbf', C=1.0, epsilon=0.1)
-            model.fit(train_x, train_y)
-
-            valid_predictions = model.predict(valid_x)
-            test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
-
-            tmp_df = train_feats.loc[valid_index][['id','score']]
-            tmp_df['preds'] = valid_predictions
-            tmp_df['iteration'] = i + 1
-            valid_preds = pd.concat([valid_preds, tmp_df])
-
-        final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-        final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
-
-    # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-    return test_preds, valid_preds, final_rmse, model 
-
 def average_model_predictions(model_preds):
     return model_preds.groupby('id')['preds'].mean().values
 
@@ -631,28 +664,24 @@ def use_plr(USE_PLR):
         return "cont"
     
 def automl_pipeline(train_feats, test_feats):
-    oof_preds = []
-    test_preds = []
+
+    valid_preds = pd.DataFrame()
+    test_preds = pd.DataFrame()
     ITERATIONS = 1
-    TRAIN_BS = [128,192,256,316,512]  # list(np.arange(64,64*6,64))
+    TRAIN_BS = [128,256]  
     RANDOM_STATE = 42
     N_THREADS = 2
     N_FOLDS = 10
-    TEST_SIZE = 0.15
-    VAL_SIZE = 0.15
     TIMEOUT = 10000
     ADVANCED_ROLES = False
     USE_QNT = True
     TASK = 'reg'
-    USE_PLR = True
-    USE_FS = False
     TARGET_NAME = 'score'
-    FEATURE_RATIO = 0.8
 
     for i in range(ITERATIONS):
         for b in TRAIN_BS:
                 
-            np.random.seed(RANDOM_STATE+b)
+            np.random.seed(RANDOM_STATE+i)
             torch.set_num_threads(N_THREADS)
             task = Task(TASK)
 
@@ -674,30 +703,28 @@ def automl_pipeline(train_feats, test_feats):
                     "freeze_defaults": True,
                 },
                 nn_pipeline_params = {"use_qnt": USE_QNT, "use_te": False},
-                reader_params = {'n_jobs': N_THREADS, 'cv': N_FOLDS, 'random_state': RANDOM_STATE, 'advanced_roles': ADVANCED_ROLES},
+                reader_params = {'n_jobs': N_THREADS, 'cv': N_FOLDS, 'random_state': RANDOM_STATE+i, 'advanced_roles': ADVANCED_ROLES},
             )
 
-            oof_pred = automl.fit_predict(train_feats, roles = roles, verbose = 1)
+            valid_pred = automl.fit_predict(train_feats, roles = roles, verbose = 0)
+            valid_tpm = train_feats[['id','score']].copy()
+            valid_tpm['preds'] = valid_pred.data.ravel()
+            valid_preds = pd.concat([valid_preds, valid_tpm], ignore_index=True)
+            joblib.dump(automl, f'automl_model_{b}_{i}.joblib')       
+
+
             test_pred = automl.predict(test_feats)    
-            joblib.dump(automl, f'automl_model_{b}_{i}.joblib')            
+            test_tmp = test_feats[['id']].copy()
+            test_tmp['score'] = test_pred.data.ravel()
+            test_preds = pd.concat([test_preds, test_tmp], ignore_index=True)
 
-            oof_preds.append(oof_pred)
-            test_preds.append(test_pred)
-            oof = score(task, mapped(train_feats[TARGET_NAME].values, task, automl.reader.class_mapping), take_pred_from_task(oof_pred.data, task))
-            denselight_list = [(oof, oof_pred.data[:, 0], test_pred.data[:, 0])]
-            print(f'RMSE: {oof}')
+    final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
+    final_std = np.std(valid_preds['preds'])
 
-    stacked_preds = np.stack([p.data[:, 0] for p in oof_preds])
-    oof_preds = np.mean(stacked_preds, axis=0)
+    valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+    valid_preds = valid_preds.sort_values('id')
 
-    stacked_test_preds = np.stack([p.data[:, 0] for p in test_preds])
-    test_preds = np.mean(stacked_test_preds, axis=0)
+    test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+    test_preds = test_preds.sort_values('id')    
 
-    y = train_feats[TARGET_NAME].values
-    final_rmse = mean_squared_error(y, oof_preds, squared=False)
-    print(f'Final RMSE: {final_rmse}')
-
-    oof_df = train_feats[['id']].copy()
-    oof_df['preds'] = oof_df
-
-    return test_preds, oof_df, final_rmse
+    return valid_preds, test_preds, final_rmse
