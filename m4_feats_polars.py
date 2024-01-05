@@ -1250,7 +1250,7 @@ def words_duration_stats(train_logs, test_logs):
     return feats[0], feats[1]
 
 def words_p_burst(train_logs, test_logs, time_agg=2500):
-    print('< words_duration_stats >')
+    print('< words_p_burst >')
 
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     logs = pl.concat([tr_logs, ts_logs], how='vertical')
@@ -1308,7 +1308,7 @@ def words_p_burst(train_logs, test_logs, time_agg=2500):
     return tr, ts
 
 def sentences_timings(train_logs, test_logs):
-    print(f' < sentences timings> ')
+    print(f'< sentences timings >')
     feats = []
     tr_logs,ts_logs = normalise_up_down_times(train_logs,test_logs)
     for data in [tr_logs, ts_logs]:
@@ -1407,73 +1407,62 @@ def sentences_timings(train_logs, test_logs):
 
 def activity_time_on_down_time(train_logs, test_logs):
 
-    print(' <activity_time_on_down_time> ')
+    print('< activity_time_on_down_time >')
     feats = []
+
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    logs = pl.concat([tr_logs, ts_logs], how='vertical')
 
-    for data in [tr_logs, ts_logs]:
+    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
 
-        logs = data.clone()
-        logs = logs.select('id','event_id','down_time','activity').filter(~pl.col('activity').str.contains('Move'))
+    logs = logs.select('id','event_id','down_time','activity').filter(~pl.col('activity').str.contains('Move'))
 
-        logs = logs.with_columns(
-            pl.col('down_time')
-            .diff()
-            .over('id')
-            .fill_null(0)
-            .alias('down_time_diff'))
+    logs = logs.with_columns(
+        pl.col('down_time')
+        .diff()
+        .over('id')
+        .fill_null(0)
+        .alias('down_time_diff'))
 
-        logs = logs.group_by('id','activity').agg(
+    logs = logs.group_by('id','activity').agg(
 
-            mean_cumul_down_time_by_act = pl.col('down_time_diff').mean(),
-            median_cumul_down_time_by_act = pl.col('down_time_diff').median(),
-            std_cumul_down_time_by_act = pl.col('down_time_diff').std(),
-            qfirst_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.25),
-            qthird_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.275,
+        mean_cumul_down_time_by_act = pl.col('down_time_diff').mean(),
+        median_cumul_down_time_by_act = pl.col('down_time_diff').median(),
+        std_cumul_down_time_by_act = pl.col('down_time_diff').std(),
+        qfirst_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.25),
+        qthird_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.275,
 
-        )).collect()
+    )).collect()
 
-        time_stats = logs.pivot(values=['mean_cumul_down_time_by_act','median_cumul_down_time_by_act',
-                                'std_cumul_down_time_by_act','qfirst_cumul_down_time_by_act',
-                                'qthird_cumul_down_time_by_act'],
-                                columns='activity', index='id').fill_null(0).sort('id')
+    logs = logs.pivot(values=['mean_cumul_down_time_by_act','median_cumul_down_time_by_act',
+                            'std_cumul_down_time_by_act','qfirst_cumul_down_time_by_act',
+                            'qthird_cumul_down_time_by_act'],
+                            columns='activity', index='id').fill_null(0).sort('id')
         
-        feats.append(time_stats)
-    return feats[0].lazy(), feats[1].lazy()
+    
+    tr_logs = logs.filter(pl.col('id').is_in(tr_ids)).lazy()
+    ts_logs = logs.filter(pl.col('id').is_in(ts_ids)).lazy()
+
+    return tr_logs, ts_logs
+
+def word_pauses_ratios(train_logs,test_logs):
+
+    tr_logs, ts_logs = add_word_pauses(train_logs, test_logs)
+    tr_re_logs, ts_re_logs = remove_word_pauses(train_logs, test_logs)
+    train_feats = tr_logs.join(tr_re_logs, on='id', how='left')
+    test_feats = ts_logs.join(ts_re_logs, on='id', how='left')
 
 
-def activity_time_on_down_time(train_logs, test_logs):
+    train_feats = train_feats.select('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
+    train_feats = train_feats.with_columns((pl.col('add_words_pause_mean')/pl.col('rmv_words_pause_mean')).alias('word_pause_mean_ratio'))
+    train_feats = train_feats.with_columns((pl.col('add_words_pause_sum')/pl.col('rmv_words_pause_sum')).alias('word_pause_sum_ratio'))
+    train_feats = train_feats.drop('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
 
-    print(' <activity_time_on_down_time> ')
-    feats = []
-    tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
+    test_feats = test_feats.select('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
+    test_feats = test_feats.with_columns((pl.col('add_words_pause_mean')/pl.col('rmv_words_pause_mean')).alias('word_pause_mean_ratio'))
+    test_feats = test_feats.with_columns((pl.col('add_words_pause_sum')/pl.col('rmv_words_pause_sum')).alias('word_pause_sum_ratio'))
+    test_feats = test_feats.drop('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
 
-    for data in [tr_logs, ts_logs]:
-
-        logs = data.clone()
-        logs = logs.select('id','event_id','down_time','activity').filter(~pl.col('activity').str.contains('Move'))
-
-        logs = logs.with_columns(
-            pl.col('down_time')
-            .diff()
-            .over('id')
-            .fill_null(0)
-            .alias('down_time_diff'))
-
-        logs = logs.group_by('id','activity').agg(
-
-            mean_cumul_down_time_by_act = pl.col('down_time_diff').mean(),
-            median_cumul_down_time_by_act = pl.col('down_time_diff').median(),
-            std_cumul_down_time_by_act = pl.col('down_time_diff').std(),
-            qfirst_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.25),
-            qthird_cumul_down_time_by_act = pl.col('down_time_diff').quantile(0.275,
-
-        )).collect()
-
-        time_stats = logs.pivot(values=['mean_cumul_down_time_by_act','median_cumul_down_time_by_act',
-                                'std_cumul_down_time_by_act','qfirst_cumul_down_time_by_act',
-                                'qthird_cumul_down_time_by_act'],
-                                columns='activity', index='id').fill_null(0).sort('id')
-        
-        feats.append(time_stats)
-    return feats[0].lazy(), feats[1].lazy()
+    return train_feats, test_feats

@@ -2,16 +2,16 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
-import torch, joblib
+# import torch, joblib
 import catboost as cb
 
-from lightautoml.automl.presets.tabular_presets import TabularAutoML
-from lightautoml.tasks import Task
+# from lightautoml.automl.presets.tabular_presets import TabularAutoML
+# from lightautoml.tasks import Task
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from sklearn import svm
 from lightgbm import LGBMRegressor
-from pytorch_tabnet.tab_model import TabNetRegressor
+# from pytorch_tabnet.tab_model import TabNetRegressor
 from itertools import combinations
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
