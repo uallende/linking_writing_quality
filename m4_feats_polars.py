@@ -1413,7 +1413,6 @@ def activity_time_on_down_time(train_logs, test_logs):
     tr_logs, ts_logs = normalise_up_down_times(train_logs, test_logs)
     logs = pl.concat([tr_logs, ts_logs], how='vertical')
 
-    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
     tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
     ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
 
@@ -1466,3 +1465,32 @@ def word_pauses_ratios(train_logs,test_logs):
     test_feats = test_feats.drop('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
 
     return train_feats, test_feats
+
+def words_rem_events_ratio(train_logs, test_logs):
+    print('< words_rem_events_ratio >')
+    feats = []
+
+    logs = pl.concat([train_logs, test_logs], how='vertical')
+
+    all_ids = pl.DataFrame({'id': logs.select(pl.col('id')).unique().collect().to_series().to_list()}).lazy()
+    tr_ids = train_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+    ts_ids = test_logs.select(pl.col('id')).unique().collect().to_series().to_list()
+
+    count_of_remove_events = logs.filter(
+        pl.col('activity')=='Remove/Cut').group_by('id').agg(
+            pl.count()
+            .alias('count_of_remove_events'))
+    
+    last_word_count = logs.group_by('id').agg(
+        pl.last('word_count')
+        .alias('last_word_count'))
+
+    ratio = count_of_remove_events.join(last_word_count, on='id', how='left')
+    ratio = ratio.with_columns((pl.col('last_word_count')/pl.col('count_of_remove_events')).alias('words_rem_events_ratio')).drop('count_of_remove_events','last_word_count')
+
+    ratio = all_ids.join(ratio, on='id', how='left').fill_null(0)
+
+    tr_ratio = ratio.filter(pl.col('id').is_in(tr_ids))
+    ts_ratio = ratio.filter(pl.col('id').is_in(ts_ids))
+
+    return tr_ratio, ts_ratio
