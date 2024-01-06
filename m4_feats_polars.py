@@ -161,6 +161,10 @@ def count_of_activities(train_logs, test_logs):
     for logs in [train_logs, test_logs]:
         counts = logs.clone()
         counts = count_by_values(counts, 'activity', activities)
+
+        counts = counts.with_columns((pl.col('activity_0_cnt')/pl.col('activity_1_cnt')).alias('ratio_1_2'))
+        counts = counts.with_columns((pl.col('activity_0_cnt')/pl.col('activity_2_cnt')).alias('ratio_1_3'))
+
         feats.append(counts)
 
     return feats[0], feats[1]
