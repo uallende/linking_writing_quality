@@ -2,16 +2,12 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
-# import torch, joblib
 import catboost as cb
 
-# from lightautoml.automl.presets.tabular_presets import TabularAutoML
-# from lightautoml.tasks import Task
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_error
 from sklearn import svm
 from lightgbm import LGBMRegressor
-# from pytorch_tabnet.tab_model import TabNetRegressor
 from itertools import combinations
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
@@ -487,7 +483,7 @@ def lgb_w_pipeline(train, test, param, n_splits=10, iterations=5):
     y = train['score'].values
     test_x = test.drop(columns=['id'])
 
-    test_preds = []
+    test_preds = pd.DataFrame()
     valid_preds = pd.DataFrame()
 
     for iter in range(iterations):
@@ -503,25 +499,31 @@ def lgb_w_pipeline(train, test, param, n_splits=10, iterations=5):
 
             valid_predictions = model.predict(valid_x)
             test_predictions = model.predict(test_x)
-            test_preds.append(test_predictions)
+            
+            test_tpm = test[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
 
-            tmp_df = train.iloc[valid_index][['id', 'score']]
+            tmp_df = train.loc[valid_index][['id','score']]
             tmp_df['preds'] = valid_predictions
             tmp_df['iteration'] = i + 1
             valid_preds = pd.concat([valid_preds, tmp_df])
 
         final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-        final_std = np.std(valid_preds['preds'])
-        cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
+    
+        valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
+        valid_preds = valid_preds.sort_values('id')
+        
+        test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+        test_preds = test_preds.sort_values('id')        
 
-    print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-    print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-    return test_preds, valid_preds, final_rmse, model
+    #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
+    return test_preds, valid_preds, final_rmse, model 
 
 # Placeholder function for calculating weights
 def calculate_weights(train):
 
-    mask_vals = [0.5, 1. , 6. , 1.5, 5.5]
+    mask_vals = [0.5, 1.0, 1.5, 5,5, 6.0]
     weights = np.ones(len(train))
 
     for val in mask_vals:
@@ -609,10 +611,6 @@ def calculate_weighted_avg(weights, model_predictions):
         weighted_preds += model_predictions[model] * weight
     return weighted_preds / np.sum(weights)
 
-best_rmse = float('inf')
-best_combination = None
-best_weights = None
-
 def average_test_predictions(test_preds):
     # Assuming test_preds is a list of arrays (one array per fold/iteration)
     return np.mean(np.vstack(test_preds), axis=0)
@@ -624,102 +622,3 @@ def calculate_weighted_avg_for_test(weights, model_predictions):
     for model, weight in zip(model_predictions.keys(), weights):
         weighted_preds += model_predictions[model] * weight / total_weight
     return weighted_preds
-
-
-def map_class(x, task, reader):
-    if task.name == 'multiclass':
-        return reader[x]
-    else:
-        return x
-
-mapped = np.vectorize(map_class)
-
-def score(task, y_true, y_pred):
-    if task.name == 'binary':
-        return roc_auc_score(y_true, y_pred)
-    elif task.name == 'multiclass':
-        return log_loss(y_true, y_pred)
-    elif task.name == 'reg' or task.name == 'multi:reg':
-        return mean_squared_error(y_true, y_pred, squared=False)
-    else:
-        raise 'Task is not correct.'
-        
-def take_pred_from_task(pred, task):
-    if task.name == 'binary' or task.name == 'reg':
-        return pred[:, 0]
-    elif task.name == 'multiclass' or task.name == 'multi:reg':
-        return pred
-    else:
-        raise 'Task is not correct.'
-        
-def use_plr(USE_PLR):
-    if USE_PLR:
-        return "plr"
-    else:
-        return "cont"
-    
-def automl_pipeline(train_feats, test_feats):
-
-    valid_preds = pd.DataFrame()
-    test_preds = pd.DataFrame()
-    ITERATIONS = 1
-    TRAIN_BS = [128,256]  
-    RANDOM_STATE = 42
-    N_THREADS = 2
-    N_FOLDS = 10
-    TIMEOUT = 10000
-    ADVANCED_ROLES = False
-    USE_QNT = True
-    TASK = 'reg'
-    TARGET_NAME = 'score'
-
-    for i in range(ITERATIONS):
-        for b in TRAIN_BS:
-                
-            np.random.seed(RANDOM_STATE+i)
-            torch.set_num_threads(N_THREADS)
-            task = Task(TASK)
-
-            roles = {
-                'target': TARGET_NAME,
-                'drop': ['id']
-            }
-            algo = 'denselight'
-            automl = TabularAutoML(
-                task = task, 
-                timeout = TIMEOUT,
-                cpu_limit = N_THREADS,
-                general_params = {"use_algos": [[algo]]},
-                nn_params = {
-                    "n_epochs": 350, 
-                    "bs": b, 
-                    "num_workers": 0, 
-                    "path_to_save": None, 
-                    "freeze_defaults": True,
-                },
-                nn_pipeline_params = {"use_qnt": USE_QNT, "use_te": False},
-                reader_params = {'n_jobs': N_THREADS, 'cv': N_FOLDS, 'random_state': RANDOM_STATE+i, 'advanced_roles': ADVANCED_ROLES},
-            )
-
-            valid_pred = automl.fit_predict(train_feats, roles = roles, verbose = 0)
-            valid_tpm = train_feats[['id','score']].copy()
-            valid_tpm['preds'] = valid_pred.data.ravel()
-            valid_preds = pd.concat([valid_preds, valid_tpm], ignore_index=True)
-            joblib.dump(automl, f'automl_model_{b}_{i}.joblib')       
-
-
-            test_pred = automl.predict(test_feats)    
-            test_tmp = test_feats[['id']].copy()
-            test_tmp['score'] = test_pred.data.ravel()
-            test_preds = pd.concat([test_preds, test_tmp], ignore_index=True)
-
-    final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-    final_std = np.std(valid_preds['preds'])
-
-    valid_preds = valid_preds.groupby(['id','score'])['preds'].mean().reset_index()
-    valid_preds = valid_preds.sort_values('id')
-
-    test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
-    test_preds = test_preds.sort_values('id')    
-
-    return valid_preds, test_preds, final_rmse

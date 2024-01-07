@@ -902,6 +902,7 @@ def sent_feats(df):
     sent_agg_df = sent_agg_df.reset_index(drop=True)
     sent_agg_df.drop(columns=["sent_word_count_count"], inplace=True)
     sent_agg_df = sent_agg_df.rename(columns={"sent_len_count":"sent_count"})
+    return sent_agg_df
 
 def sent_long_word_count(df):
 
