@@ -422,3 +422,92 @@ def word_count_stats(train_logs, test_logs):
         )
         feats.append(word_count_stats)
     return feats[0], feats[1]        
+
+
+    #     '''
+    #     Credit: https://www.kaggle.com/code/olyatsimboy/towards-tf-idf-in-logs-features
+    #     '''
+    #     cnts = ret_tfidf.sum(1)
+
+    #     for col in tfidf_cols:
+    #         if col in self.idf.keys():
+    #             idf = self.idf[col]
+    #         else:
+    #             idf = df.shape[0] / (ret_tfidf[col].sum() + 1)
+    #             idf = np.log(idf)
+    #             self.idf[col] = idf
+
+    #         ret_tfidf[col] = 1 + np.log(ret_tfidf[col] / cnts)
+    #         ret_tfidf[col] *= idf
+        
+    #     ret_agg = pd.concat([ret_tfidf, ret_normal], axis=1)
+    #     return ret_agg
+
+    # def event_counts(self, df, colname):
+    #     tmp_df = df.groupby('id').agg({colname: list}).reset_index()
+    #     ret = list()
+    #     for li in tqdm(tmp_df[colname].values):
+    #         items = list(Counter(li).items())
+    #         di = dict()
+    #         for k in self.events:
+    #             di[k] = 0
+    #         for item in items:
+    #             k, v = item[0], item[1]
+    #             if k in di:
+    #                 di[k] = v
+    #         ret.append(di)
+            
+    #     ret = pd.DataFrame(ret)
+    #     # using tfidf
+    #     ret_tfidf = pd.DataFrame(ret)
+    #     # returning counts as is
+    #     ret_normal = pd.DataFrame(ret)
+        
+    #     tfidf_cols = [f'{colname}_{event}_tfidf_count' for event in ret.columns]
+    #     normal_cols = [f'{colname}_{event}_normal_count' for event in ret.columns]
+        
+    #     ret_tfidf.columns = tfidf_cols
+    #     ret_normal.columns = normal_cols
+        
+    #     '''
+    #     Credit: https://www.kaggle.com/code/olyatsimboy/towards-tf-idf-in-logs-features
+    #     '''
+    #     cnts = ret_tfidf.sum(1)
+
+    #     for col in tfidf_cols:
+    #         if col in self.idf.keys():
+    #             idf = self.idf[col]
+    #         else:
+    #             idf = df.shape[0] / (ret_tfidf[col].sum() + 1)
+    #             idf = np.log(idf)
+    #             self.idf[col] = idf
+
+    #         ret_tfidf[col] = 1 + np.log(ret_tfidf[col] / cnts)
+    #         ret_tfidf[col] *= idf
+        
+    #     ret_agg = pd.concat([ret_tfidf, ret_normal], axis=1)
+    #     return ret_agg
+
+
+    # def compute_sentence_aggregations(self, sent_df):
+    #     sent_agg_df = sent_df[['id','sent_len','sent_word_count']].groupby(['id']).agg(self.aggregations)
+    #     sent_agg_df.columns = ['_'.join(x) for x in sent_agg_df.columns]
+    #     sent_agg_df['id'] = sent_agg_df.index
+    #     # New features: computing the # of sentences whose (character) length exceed sent_l
+    #     for sent_l in [50, 60, 75, 100]:
+    #         sent_agg_df[f'sent_len_ge_{sent_l}_count'] = sent_df[sent_df['sent_len'] >= sent_l].groupby(['id']).count().iloc[:, 0]
+    #         sent_agg_df[f'sent_len_ge_{sent_l}_count'] = sent_agg_df[f'sent_len_ge_{sent_l}_count'].fillna(0)
+    #     sent_agg_df = sent_agg_df.reset_index(drop=True)
+    #     return sent_agg_df
+
+
+    # def compute_word_aggregations(self, word_df):
+    #     word_agg_df = word_df[['id','word_len']].groupby(['id']).agg(self.aggregations)
+    #     word_agg_df.columns = ['_'.join(x) for x in word_agg_df.columns]
+    #     word_agg_df['id'] = word_agg_df.index
+    #     # New features: computing the # of words whose length exceed word_l
+    #     for word_l in [5, 6, 7, 8, 9, 10, 11, 12]:
+    #         word_agg_df[f'word_len_ge_{word_l}_count'] = word_df[word_df['word_len'] >= word_l].groupby(['id']).count().iloc[:, 0]
+    #         word_agg_df[f'word_len_ge_{word_l}_count'] = word_agg_df[f'word_len_ge_{word_l}_count'].fillna(0)
+    #     word_agg_df = word_agg_df.reset_index(drop=True)
+    #     return word_agg_df
