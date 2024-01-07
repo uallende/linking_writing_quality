@@ -1458,12 +1458,12 @@ def word_pauses_ratios(train_logs,test_logs):
     test_feats = ts_logs.join(ts_re_logs, on='id', how='left')
 
 
-    train_feats = train_feats.select('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
+    train_feats = train_feats.select('id','add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
     train_feats = train_feats.with_columns((pl.col('add_words_pause_mean')/pl.col('rmv_words_pause_mean')).alias('word_pause_mean_ratio'))
     train_feats = train_feats.with_columns((pl.col('add_words_pause_sum')/pl.col('rmv_words_pause_sum')).alias('word_pause_sum_ratio'))
     train_feats = train_feats.drop('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
 
-    test_feats = test_feats.select('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
+    test_feats = test_feats.select('id','add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
     test_feats = test_feats.with_columns((pl.col('add_words_pause_mean')/pl.col('rmv_words_pause_mean')).alias('word_pause_mean_ratio'))
     test_feats = test_feats.with_columns((pl.col('add_words_pause_sum')/pl.col('rmv_words_pause_sum')).alias('word_pause_sum_ratio'))
     test_feats = test_feats.drop('add_words_pause_mean','add_words_pause_sum','rmv_words_pause_mean','rmv_words_pause_sum')
