@@ -520,7 +520,6 @@ def lgb_w_pipeline(train, test, param, n_splits=10, iterations=5):
     #print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')    
     return test_preds, valid_preds, final_rmse, model 
 
-# Placeholder function for calculating weights
 def calculate_weights(train):
 
     mask_vals = [0.5, 1.0, 1.5, 5,5, 6.0]
@@ -530,76 +529,6 @@ def calculate_weights(train):
         weights[train['score'] == val] = 1.5
 
     return weights
-
-# def TabNet_pipeline(train_feats, test_feats, params):
-
-#     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-#     # DEVICE = 'cpu'
-
-#     def train_valid_split(data_x, data_y, train_idx, valid_idx):
-#         x_train = data_x.loc[train_idx].values
-#         y_train = data_y[train_idx].values.reshape(-1,1)
-#         x_valid = data_x.loc[valid_idx].values
-#         y_valid = data_y[valid_idx].values.reshape(-1,1)
-#         return x_train, y_train, x_valid, y_valid
-
-#     def preprocess_feats(feats, scaler=StandardScaler()):
-#         # Replace inf/-inf with NaN and then fill NaNs with a large negative number
-#         feats = np.where(np.isinf(feats), np.nan, feats)
-#         feats = np.nan_to_num(feats, nan=-1e6)
-#         return scaler.fit_transform(feats)
-    
-#     tr_ids = train_feats.id
-#     ts_ids = test_feats.id
-#     tr_cols = train_feats.columns[~train_feats.columns.isin(['id','score'])]
-
-#     feats = pd.concat([train_feats, test_feats], axis=0)
-#     feats.loc[:,tr_cols] = preprocess_feats(feats.loc[:,tr_cols])
-
-#     train_feats = feats[feats['id'].isin(tr_ids)]
-#     test_feats = feats[feats['id'].isin(ts_ids)]
-
-#     x = train_feats.drop(['id', 'score'], axis=1)
-#     y = train_feats['score']
-
-#     test_x = test_feats.drop(columns = ['id', 'score'])
-#     test_x = preprocess_feats(test_x)
-
-#     test_preds = []
-#     valid_preds = pd.DataFrame()
-
-#     for iter in range(1):
-#         skf = StratifiedKFold(n_splits=10, random_state=42+iter, shuffle=True)
-#         for i, (train_index, valid_index) in enumerate(skf.split(x, y.astype(str))):
-
-#             model = TabNetRegressor(**params, device_name=DEVICE, verbose=0)
-#             train_x, train_y, valid_x, valid_y = train_valid_split(x, y, train_index, valid_index)
-
-#             model.fit(
-#                 X_train = train_x, y_train = train_y,
-#                 eval_set = [(train_x, train_y), (valid_x, valid_y)],
-#                 max_epochs = 1000,
-#                 patience = 70,
-#             )
-
-#             valid_predictions = model.predict(valid_x)
-#             test_predictions = model.predict(test_x)
-#             test_preds.append(test_predictions)
-
-#             tmp_df = train_feats.loc[valid_index][['id','score']]
-#             tmp_df['preds'] = valid_predictions
-#             tmp_df['iteration'] = i + 1
-#             valid_preds = pd.concat([valid_preds, tmp_df])
-
-#             torch.cuda.empty_cache()
-#             del train_x, train_y, valid_x, valid_y
-
-#     final_rmse = mean_squared_error(valid_preds['score'], valid_preds['preds'], squared=False)
-#     final_std = np.std(valid_preds['preds'])
-#     cv_rmse = valid_preds.groupby(['iteration']).apply(lambda g: calculate_rmse(g['score'], g['preds']))
-#     # print(f'Final RMSE over {n_splits * iterations}: {final_rmse:.6f}. Std {final_std:.4f}')
-#     # print(f'RMSE by fold {np.mean(cv_rmse):.6f}. Std {np.std(cv_rmse):.4f}')
-#     return test_preds, valid_preds, final_rmse, model 
 
 def average_model_predictions(model_preds):
     return model_preds.groupby('id')['preds'].mean().values
@@ -612,10 +541,8 @@ def calculate_weighted_avg(weights, model_predictions):
     return weighted_preds / np.sum(weights)
 
 def average_test_predictions(test_preds):
-    # Assuming test_preds is a list of arrays (one array per fold/iteration)
     return np.mean(np.vstack(test_preds), axis=0)
 
-# Apply the best weights to calculate the blended test predictions
 def calculate_weighted_avg_for_test(weights, model_predictions):
     weighted_preds = np.zeros_like(list(model_predictions.values())[0])
     total_weight = np.sum(weights)

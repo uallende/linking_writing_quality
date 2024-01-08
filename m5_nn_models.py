@@ -38,7 +38,7 @@ def automl_pipeline(train_feats, test_feats):
 
     valid_preds = pd.DataFrame()
     test_preds = pd.DataFrame()
-    ITERATIONS = 10
+    ITERATIONS = 3
     TRAIN_BS = [128,256]  
     RANDOM_STATE = 42
     N_THREADS = 2
