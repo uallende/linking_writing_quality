@@ -533,19 +533,18 @@ def calculate_weights(train):
 def average_model_predictions(model_preds):
     return model_preds.groupby('id')['preds'].mean().values
 
-# Weighted Average Combinations
-def calculate_weighted_avg(weights, model_predictions):
-    weighted_preds = np.zeros_like(list(model_predictions.values())[0])
-    for model, weight in zip(model_predictions.keys(), weights):
-        weighted_preds += model_predictions[model] * weight
+def calculate_weighted_avg(weights, model_subset):
+    """
+    Calculate the weighted average of predictions from a subset of models.
+    """
+    weighted_preds = np.zeros_like(list(model_subset.values())[0]['preds'])
+    for model, weight in zip(model_subset.keys(), weights):
+        weighted_preds += model_subset[model]['preds'] * weight
     return weighted_preds / np.sum(weights)
 
-def average_test_predictions(test_preds):
-    return np.mean(np.vstack(test_preds), axis=0)
-
 def calculate_weighted_avg_for_test(weights, model_predictions):
-    weighted_preds = np.zeros_like(list(model_predictions.values())[0])
+    weighted_preds = np.zeros_like(list(model_predictions.values())[0]['score'])
     total_weight = np.sum(weights)
     for model, weight in zip(model_predictions.keys(), weights):
-        weighted_preds += model_predictions[model] * weight / total_weight
+        weighted_preds += model_predictions[model]['score'] * weight / total_weight
     return weighted_preds
