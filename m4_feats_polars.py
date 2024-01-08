@@ -863,11 +863,6 @@ def word_feats(df):
     word_agg_df.columns = ['_'.join(x) for x in word_agg_df.columns]
     word_agg_df['id'] = word_agg_df.index
     word_agg_df = word_agg_df.reset_index(drop=True)
-
-    for word_l in [5, 6, 7, 8, 9, 10, 11, 12]:
-        word_agg_df[f'word_len_ge_{word_l}_count'] = df[df['word_len'] >= word_l].groupby(['id']).count().iloc[:, 0]
-        word_agg_df[f'word_len_ge_{word_l}_count'] = word_agg_df[f'word_len_ge_{word_l}_count'].fillna(0)
-    word_agg_df = word_agg_df.reset_index(drop=True)
     return word_agg_df
 
 def word_long_word_count(df):
@@ -1561,6 +1556,14 @@ def split_essays_into_sentences(essay_df):
     essay_df = essay_df[essay_df.sent_len!=0].reset_index(drop=True)
     return essay_df
 
+def split_essays_into_words(self, essay_df):
+    essay_df['word'] = essay_df['essay'].apply(lambda x: re.split(' |\\n|\\.|\\?|\\!',x))
+    essay_df = essay_df.explode('word')
+    # Word length (number of characters in word)
+    essay_df['word_len'] = essay_df['word'].apply(lambda x: len(x))
+    essay_df = essay_df[essay_df['word_len'] != 0]
+    return essay_df
+
 def sent_long_word_count(sent_df):
     aggregations = ['mean', 'std', 'min', 'max', 'first', 'last', 'sem', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
     sent_agg_df = sent_df[['id','sent_len','sent_word_count']].groupby(['id']).agg(aggregations)
@@ -1574,26 +1577,3 @@ def sent_long_word_count(sent_df):
     cols = ['id'] + [f'sent_len_ge_{sent_l}_count' for sent_l in [50, 60, 75, 100]]
 
     return sent_agg_df[cols]
-
-
-def split_essays_into_words(essay_df):
-    essay_df['word'] = essay_df['essay'].apply(lambda x: re.split(' |\\n|\\.|\\?|\\!',x))
-    essay_df = essay_df.explode('word')
-    # Word length (number of characters in word)
-    essay_df['word_len'] = essay_df['word'].apply(lambda x: len(x))
-    essay_df = essay_df[essay_df['word_len'] != 0]
-    return essay_df
-
-def word_long_word_count(word_df):
-    aggregations = ['mean', 'std', 'min', 'max', 'first', 'last', 'sem', q1, 'median', q3, 'skew', pd.DataFrame.kurt, 'sum']
-    word_agg_df = word_df[['id','word_len']].groupby(['id']).agg(aggregations)
-    word_agg_df.columns = ['_'.join(x) for x in word_agg_df.columns]
-    word_agg_df['id'] = word_agg_df.index
-    # New features: computing the # of words whose length exceed word_l
-    for word_l in [5, 6, 7, 8, 9, 10, 11, 12]:
-        word_agg_df[f'word_len_ge_{word_l}_count'] = word_df[word_df['word_len'] >= word_l].groupby(['id']).count().iloc[:, 0]
-        word_agg_df[f'word_len_ge_{word_l}_count'] = word_agg_df[f'word_len_ge_{word_l}_count'].fillna(0)
-    word_agg_df = word_agg_df.reset_index(drop=True)
-
-    cols = ['id'] + [f'word_len_ge_{word_l}_count' for word_l in [5, 6, 7, 8, 9, 10, 11, 12]]
-    return word_agg_df[cols]
