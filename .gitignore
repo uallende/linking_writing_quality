@@ -20,3 +20,4 @@ catboost_info/*
 SPF_blends.ipynb
 SPF_blends*SPF_blends.ipynb
 automl_model*
+*.joblib
