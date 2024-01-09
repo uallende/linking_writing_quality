@@ -151,6 +151,41 @@ def ridge_pipeline(train, test, param, iterations=50):
     
     return test_preds
 
+def lgb_w_full_train_set(train, test, param, iterations=50):
+        
+    x = train.drop(['id', 'score'], axis=1)
+    y = train['score'].values
+    test_x = test.drop(columns=['id'])
+
+    test_preds = pd.DataFrame()
+    valid_preds = pd.DataFrame()
+
+    for iter in range(iterations):
+
+            weights = calculate_weights(train)  
+            lgb_train = lgb.Dataset(x, label=y, weight=weights)
+            model = lgb.train(param, lgb_train)
+
+            test_predictions = model.predict(test_x)
+            test_tpm = test[['id']].copy()
+            test_tpm.loc[:,'score'] = test_predictions
+            test_preds = pd.concat([test_preds, test_tpm])
+       
+    test_preds = test_preds.groupby(['id'])['score'].mean().reset_index()
+    test_preds = test_preds.sort_values('id')        
+
+    return test_preds 
+
+def calculate_weights(train):
+
+    mask_vals = [0.5, 1.0, 1.5, 5,5, 6.0]
+    weights = np.ones(len(train))
+
+    for val in mask_vals:
+        weights[train['score'] == val] = 1.5
+
+    return weights
+
 def map_class(x, task, reader):
     if task.name == 'multiclass':
         return reader[x]
